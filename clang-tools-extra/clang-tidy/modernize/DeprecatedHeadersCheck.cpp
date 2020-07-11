@@ -40,12 +40,10 @@ private:
 };
 } // namespace
 
-void DeprecatedHeadersCheck::registerPPCallbacks(CompilerInstance &Compiler) {
-  if (this->getLangOpts().CPlusPlus) {
-    Compiler.getPreprocessor().addPPCallbacks(
-        ::llvm::make_unique<IncludeModernizePPCallbacks>(*this,
-                                                         this->getLangOpts()));
-  }
+void DeprecatedHeadersCheck::registerPPCallbacks(
+    const SourceManager &SM, Preprocessor *PP, Preprocessor *ModuleExpanderPP) {
+    PP->addPPCallbacks(
+        ::std::make_unique<IncludeModernizePPCallbacks>(*this, getLangOpts()));
 }
 
 IncludeModernizePPCallbacks::IncludeModernizePPCallbacks(ClangTidyCheck &Check,

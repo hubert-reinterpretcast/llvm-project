@@ -6,13 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_Host_HostInfoBase_h_
-#define lldb_Host_HostInfoBase_h_
+#ifndef LLDB_HOST_HOSTINFOBASE_H
+#define LLDB_HOST_HOSTINFOBASE_H
 
 #include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/UserIDResolver.h"
+#include "lldb/Utility/XcodeSDK.h"
 #include "lldb/lldb-enumerations.h"
-
 #include "llvm/ADT/StringRef.h"
 
 #include <stdint.h>
@@ -33,21 +34,12 @@ public:
   static void Initialize();
   static void Terminate();
 
-  //------------------------------------------------------------------
-  /// Gets the host target triple as a const string.
+  /// Gets the host target triple.
   ///
-  /// @return
-  ///     A const string object containing the host target triple.
-  //------------------------------------------------------------------
-  static llvm::StringRef GetTargetTriple();
+  /// \return
+  ///     The host target triple.
+  static llvm::Triple GetTargetTriple();
 
-  //------------------------------------------------------------------
-  /// Gets the host architecture.
-  ///
-  /// @return
-  ///     A const architecture object that represents the host
-  ///     architecture.
-  //------------------------------------------------------------------
   enum ArchitectureKind {
     eArchKindDefault, // The overall default architecture that applications will
                       // run on this host
@@ -92,12 +84,19 @@ public:
   /// FileSpec is filled in.
   static FileSpec GetGlobalTempDir();
 
-  //---------------------------------------------------------------------------
   /// If the triple does not specify the vendor, os, and environment parts, we
   /// "augment" these using information from the host and return the resulting
   /// ArchSpec object.
-  //---------------------------------------------------------------------------
   static ArchSpec GetAugmentedArchSpec(llvm::StringRef triple);
+
+  static bool ComputePathRelativeToLibrary(FileSpec &file_spec,
+                                           llvm::StringRef dir);
+
+  static FileSpec GetXcodeContentsDirectory() { return {}; }
+  static FileSpec GetXcodeDeveloperDirectory() { return {}; }
+  
+  /// Return the directory containing a specific Xcode SDK.
+  static llvm::StringRef GetXcodeSDKPath(XcodeSDK sdk) { return {}; }
 
 protected:
   static bool ComputeSharedLibraryDirectory(FileSpec &file_spec);

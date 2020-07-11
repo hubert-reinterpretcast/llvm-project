@@ -6,9 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef __JSONGenerator_h_
-#define __JSONGenerator_h_
-
+#ifndef LLDB_TOOLS_DEBUGSERVER_SOURCE_JSONGENERATOR_H
+#define LLDB_TOOLS_DEBUGSERVER_SOURCE_JSONGENERATOR_H
 
 #include <iomanip>
 #include <sstream>
@@ -16,15 +15,13 @@
 #include <utility>
 #include <vector>
 
-//----------------------------------------------------------------------
-/// @class JSONGenerator JSONGenerator.h
+/// \class JSONGenerator JSONGenerator.h
 /// A class which can construct structured data for the sole purpose
 /// of printing it in JSON format.
 ///
 /// A stripped down version of lldb's StructuredData objects which are much
 /// general purpose.  This variant is intended only for assembling information
 /// and printing it as a JSON string.
-//----------------------------------------------------------------------
 
 class JSONGenerator {
 public:
@@ -313,4 +310,4 @@ public:
 
 }; // class JSONGenerator
 
-#endif // __JSONGenerator_h_
+#endif // LLDB_TOOLS_DEBUGSERVER_SOURCE_JSONGENERATOR_H

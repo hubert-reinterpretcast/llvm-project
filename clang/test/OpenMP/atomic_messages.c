@@ -1,6 +1,14 @@
-// RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 %s
+// RUN: %clang_cc1 -verify=expected,omp45 -fopenmp -fopenmp-version=45 -ferror-limit 100 %s -Wuninitialized
+// RUN: %clang_cc1 -verify=expected,omp50 -fopenmp -fopenmp-version=50 -ferror-limit 100 %s -Wuninitialized
 
-// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 %s
+// RUN: %clang_cc1 -verify=expected,omp45 -fopenmp-simd -fopenmp-version=45 -ferror-limit 100 %s -Wuninitialized
+// RUN: %clang_cc1 -verify=expected,omp50 -fopenmp-simd -fopenmp-version=50 -ferror-limit 100 %s -Wuninitialized
+
+void xxx(int argc) {
+  int x; // expected-note {{initialize the variable 'x' to silence this warning}}
+#pragma omp atomic read
+  argc = x; // expected-warning {{variable 'x' is uninitialized when used here}}
+}
 
 int foo() {
 L1:
@@ -59,8 +67,8 @@ int readint() {
 
 int readS() {
   struct S a, b;
-  // expected-error@+1 {{directive '#pragma omp atomic' cannot contain more than one 'read' clause}}
-#pragma omp atomic read read
+  // expected-error@+1 {{directive '#pragma omp atomic' cannot contain more than one 'read' clause}} expected-error@+1 {{unexpected OpenMP clause 'allocate' in directive '#pragma omp atomic'}}
+#pragma omp atomic read read allocate(a)
   // expected-error@+2 {{the statement for 'atomic read' must be an expression statement of form 'v = x;', where v and x are both lvalue expressions with scalar type}}
   // expected-note@+1 {{expected expression of scalar type}}
   a = b;
@@ -371,3 +379,18 @@ int captureint() {
   return 0;
 }
 
+void hint() {
+  int a = 0;
+#pragma omp atomic hint // omp45-error {{unexpected OpenMP clause 'hint' in directive '#pragma omp atomic'}} expected-error {{expected '(' after 'hint'}}
+  a += 1;
+#pragma omp atomic hint( // omp45-error {{unexpected OpenMP clause 'hint' in directive '#pragma omp atomic'}} expected-error {{expected expression}} expected-error {{expected ')'}} expected-note {{to match this '('}}
+  a += 1;
+#pragma omp atomic hint(+ // omp45-error {{unexpected OpenMP clause 'hint' in directive '#pragma omp atomic'}} expected-error {{expected expression}} expected-error {{expected ')'}} expected-note {{to match this '('}}
+  a += 1;
+#pragma omp atomic hint(a // omp45-error {{unexpected OpenMP clause 'hint' in directive '#pragma omp atomic'}} expected-error {{expected ')'}} expected-note {{to match this '('}} omp50-error {{expression is not an integer constant expression}}
+  a += 1;
+#pragma omp atomic hint(a) // omp45-error {{unexpected OpenMP clause 'hint' in directive '#pragma omp atomic'}} omp50-error {{expression is not an integer constant expression}}
+  a += 1;
+#pragma omp atomic hint(1) hint(1) // omp45-error 2 {{unexpected OpenMP clause 'hint' in directive '#pragma omp atomic'}} expected-error {{directive '#pragma omp atomic' cannot contain more than one 'hint' clause}}
+  a += 1;
+}

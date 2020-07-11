@@ -14,15 +14,18 @@
 //===----------------------------------------------------------------------===//
 
 #include "WebAssemblyAsmPrinter.h"
-#include "InstPrinter/WebAssemblyInstPrinter.h"
+#include "MCTargetDesc/WebAssemblyInstPrinter.h"
 #include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
 #include "MCTargetDesc/WebAssemblyTargetStreamer.h"
+#include "TargetInfo/WebAssemblyTargetInfo.h"
 #include "WebAssembly.h"
 #include "WebAssemblyMCInstLower.h"
 #include "WebAssemblyMachineFunctionInfo.h"
 #include "WebAssemblyRegisterInfo.h"
+#include "WebAssemblyTargetMachine.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/BinaryFormat/Wasm.h"
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
@@ -31,6 +34,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSectionWasm.h"
 #include "llvm/MC/MCStreamer.h"
@@ -63,8 +67,8 @@ MVT WebAssemblyAsmPrinter::getRegType(unsigned RegNo) const {
 }
 
 std::string WebAssemblyAsmPrinter::regToString(const MachineOperand &MO) {
-  unsigned RegNo = MO.getReg();
-  assert(TargetRegisterInfo::isVirtualRegister(RegNo) &&
+  Register RegNo = MO.getReg();
+  assert(Register::isVirtualRegister(RegNo) &&
          "Unlowered physical register encountered during assembly printing");
   assert(!MFI->isVRegStackified(RegNo));
   unsigned WAReg = MFI->getWAReg(RegNo);
@@ -81,7 +85,7 @@ WebAssemblyTargetStreamer *WebAssemblyAsmPrinter::getTargetStreamer() {
 // WebAssemblyAsmPrinter Implementation.
 //===----------------------------------------------------------------------===//
 
-void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
+void WebAssemblyAsmPrinter::emitEndOfAsmFile(Module &M) {
   for (auto &It : OutContext.getSymbols()) {
     // Emit a .globaltype and .eventtype declaration.
     auto Sym = cast<MCSymbolWasm>(It.getValue());
@@ -92,11 +96,14 @@ void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
   }
 
   for (const auto &F : M) {
+    if (F.isIntrinsic())
+      continue;
+
     // Emit function type info for all undefined functions
-    if (F.isDeclarationForLinker() && !F.isIntrinsic()) {
+    if (F.isDeclarationForLinker()) {
       SmallVector<MVT, 4> Results;
       SmallVector<MVT, 4> Params;
-      computeSignatureVTs(F.getFunctionType(), F, TM, Params, Results);
+      computeSignatureVTs(F.getFunctionType(), &F, F, TM, Params, Results);
       auto *Sym = cast<MCSymbolWasm>(getSymbol(&F));
       Sym->setType(wasm::WASM_SYMBOL_TYPE_FUNCTION);
       if (!Sym->getSignature()) {
@@ -115,16 +122,23 @@ void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
           F.hasFnAttribute("wasm-import-module")) {
         StringRef Name =
             F.getFnAttribute("wasm-import-module").getValueAsString();
-        Sym->setImportModule(Name);
+        Sym->setImportModule(storeName(Name));
         getTargetStreamer()->emitImportModule(Sym, Name);
       }
       if (TM.getTargetTriple().isOSBinFormatWasm() &&
           F.hasFnAttribute("wasm-import-name")) {
         StringRef Name =
             F.getFnAttribute("wasm-import-name").getValueAsString();
-        Sym->setImportName(Name);
+        Sym->setImportName(storeName(Name));
         getTargetStreamer()->emitImportName(Sym, Name);
       }
+    }
+
+    if (F.hasFnAttribute("wasm-export-name")) {
+      auto *Sym = cast<MCSymbolWasm>(getSymbol(&F));
+      StringRef Name = F.getFnAttribute("wasm-export-name").getValueAsString();
+      Sym->setExportName(storeName(Name));
+      getTargetStreamer()->emitExportName(Sym, Name);
     }
   }
 
@@ -153,12 +167,13 @@ void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
       MCSectionWasm *MySection =
           OutContext.getWasmSection(SectionName, SectionKind::getMetadata());
       OutStreamer->SwitchSection(MySection);
-      OutStreamer->EmitBytes(Contents->getString());
+      OutStreamer->emitBytes(Contents->getString());
       OutStreamer->PopSection();
     }
   }
 
   EmitProducerInfo(M);
+  EmitTargetFeatures(M);
 }
 
 void WebAssemblyAsmPrinter::EmitProducerInfo(Module &M) {
@@ -193,39 +208,96 @@ void WebAssemblyAsmPrinter::EmitProducerInfo(Module &M) {
         ".custom_section.producers", SectionKind::getMetadata());
     OutStreamer->PushSection();
     OutStreamer->SwitchSection(Producers);
-    OutStreamer->EmitULEB128IntValue(FieldCount);
+    OutStreamer->emitULEB128IntValue(FieldCount);
     for (auto &Producers : {std::make_pair("language", &Languages),
             std::make_pair("processed-by", &Tools)}) {
       if (Producers.second->empty())
         continue;
-      OutStreamer->EmitULEB128IntValue(strlen(Producers.first));
-      OutStreamer->EmitBytes(Producers.first);
-      OutStreamer->EmitULEB128IntValue(Producers.second->size());
+      OutStreamer->emitULEB128IntValue(strlen(Producers.first));
+      OutStreamer->emitBytes(Producers.first);
+      OutStreamer->emitULEB128IntValue(Producers.second->size());
       for (auto &Producer : *Producers.second) {
-        OutStreamer->EmitULEB128IntValue(Producer.first.size());
-        OutStreamer->EmitBytes(Producer.first);
-        OutStreamer->EmitULEB128IntValue(Producer.second.size());
-        OutStreamer->EmitBytes(Producer.second);
+        OutStreamer->emitULEB128IntValue(Producer.first.size());
+        OutStreamer->emitBytes(Producer.first);
+        OutStreamer->emitULEB128IntValue(Producer.second.size());
+        OutStreamer->emitBytes(Producer.second);
       }
     }
     OutStreamer->PopSection();
   }
 }
 
-void WebAssemblyAsmPrinter::EmitConstantPool() {
+void WebAssemblyAsmPrinter::EmitTargetFeatures(Module &M) {
+  struct FeatureEntry {
+    uint8_t Prefix;
+    std::string Name;
+  };
+
+  // Read target features and linkage policies from module metadata
+  SmallVector<FeatureEntry, 4> EmittedFeatures;
+  auto EmitFeature = [&](std::string Feature) {
+    std::string MDKey = (StringRef("wasm-feature-") + Feature).str();
+    Metadata *Policy = M.getModuleFlag(MDKey);
+    if (Policy == nullptr)
+      return;
+
+    FeatureEntry Entry;
+    Entry.Prefix = 0;
+    Entry.Name = Feature;
+
+    if (auto *MD = cast<ConstantAsMetadata>(Policy))
+      if (auto *I = cast<ConstantInt>(MD->getValue()))
+        Entry.Prefix = I->getZExtValue();
+
+    // Silently ignore invalid metadata
+    if (Entry.Prefix != wasm::WASM_FEATURE_PREFIX_USED &&
+        Entry.Prefix != wasm::WASM_FEATURE_PREFIX_REQUIRED &&
+        Entry.Prefix != wasm::WASM_FEATURE_PREFIX_DISALLOWED)
+      return;
+
+    EmittedFeatures.push_back(Entry);
+  };
+
+  for (const SubtargetFeatureKV &KV : WebAssemblyFeatureKV) {
+    EmitFeature(KV.Key);
+  }
+  // This pseudo-feature tells the linker whether shared memory would be safe
+  EmitFeature("shared-mem");
+
+  if (EmittedFeatures.size() == 0)
+    return;
+
+  // Emit features and linkage policies into the "target_features" section
+  MCSectionWasm *FeaturesSection = OutContext.getWasmSection(
+      ".custom_section.target_features", SectionKind::getMetadata());
+  OutStreamer->PushSection();
+  OutStreamer->SwitchSection(FeaturesSection);
+
+  OutStreamer->emitULEB128IntValue(EmittedFeatures.size());
+  for (auto &F : EmittedFeatures) {
+    OutStreamer->emitIntValue(F.Prefix, 1);
+    OutStreamer->emitULEB128IntValue(F.Name.size());
+    OutStreamer->emitBytes(F.Name);
+  }
+
+  OutStreamer->PopSection();
+}
+
+void WebAssemblyAsmPrinter::emitConstantPool() {
   assert(MF->getConstantPool()->getConstants().empty() &&
          "WebAssembly disables constant pools");
 }
 
-void WebAssemblyAsmPrinter::EmitJumpTableInfo() {
+void WebAssemblyAsmPrinter::emitJumpTableInfo() {
   // Nothing to do; jump tables are incorporated into the instruction stream.
 }
 
-void WebAssemblyAsmPrinter::EmitFunctionBodyStart() {
+void WebAssemblyAsmPrinter::emitFunctionBodyStart() {
   const Function &F = MF->getFunction();
   SmallVector<MVT, 1> ResultVTs;
   SmallVector<MVT, 4> ParamVTs;
-  computeSignatureVTs(F.getFunctionType(), F, TM, ParamVTs, ResultVTs);
+  computeSignatureVTs(F.getFunctionType(), &F, F, TM, ParamVTs, ResultVTs);
+
   auto Signature = signatureFromMVTs(ResultVTs, ParamVTs);
   auto *WasmSym = cast<MCSymbolWasm>(CurrentFnSym);
   WasmSym->setSignature(Signature.get());
@@ -247,10 +319,10 @@ void WebAssemblyAsmPrinter::EmitFunctionBodyStart() {
   valTypesFromMVTs(MFI->getLocals(), Locals);
   getTargetStreamer()->emitLocal(Locals);
 
-  AsmPrinter::EmitFunctionBodyStart();
+  AsmPrinter::emitFunctionBodyStart();
 }
 
-void WebAssemblyAsmPrinter::EmitInstruction(const MachineInstr *MI) {
+void WebAssemblyAsmPrinter::emitInstruction(const MachineInstr *MI) {
   LLVM_DEBUG(dbgs() << "EmitInstruction: " << *MI << '\n');
 
   switch (MI->getOpcode()) {
@@ -277,42 +349,18 @@ void WebAssemblyAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     // These represent values which are live into the function entry, so there's
     // no instruction to emit.
     break;
-  case WebAssembly::FALLTHROUGH_RETURN_I32:
-  case WebAssembly::FALLTHROUGH_RETURN_I32_S:
-  case WebAssembly::FALLTHROUGH_RETURN_I64:
-  case WebAssembly::FALLTHROUGH_RETURN_I64_S:
-  case WebAssembly::FALLTHROUGH_RETURN_F32:
-  case WebAssembly::FALLTHROUGH_RETURN_F32_S:
-  case WebAssembly::FALLTHROUGH_RETURN_F64:
-  case WebAssembly::FALLTHROUGH_RETURN_F64_S:
-  case WebAssembly::FALLTHROUGH_RETURN_v16i8:
-  case WebAssembly::FALLTHROUGH_RETURN_v16i8_S:
-  case WebAssembly::FALLTHROUGH_RETURN_v8i16:
-  case WebAssembly::FALLTHROUGH_RETURN_v8i16_S:
-  case WebAssembly::FALLTHROUGH_RETURN_v4i32:
-  case WebAssembly::FALLTHROUGH_RETURN_v4i32_S:
-  case WebAssembly::FALLTHROUGH_RETURN_v2i64:
-  case WebAssembly::FALLTHROUGH_RETURN_v2i64_S:
-  case WebAssembly::FALLTHROUGH_RETURN_v4f32:
-  case WebAssembly::FALLTHROUGH_RETURN_v4f32_S:
-  case WebAssembly::FALLTHROUGH_RETURN_v2f64:
-  case WebAssembly::FALLTHROUGH_RETURN_v2f64_S: {
+  case WebAssembly::FALLTHROUGH_RETURN: {
     // These instructions represent the implicit return at the end of a
-    // function body. Always pops one value off the stack.
+    // function body.
     if (isVerbose()) {
-      OutStreamer->AddComment("fallthrough-return-value");
+      OutStreamer->AddComment("fallthrough-return");
       OutStreamer->AddBlankLine();
     }
     break;
   }
-  case WebAssembly::FALLTHROUGH_RETURN_VOID:
-  case WebAssembly::FALLTHROUGH_RETURN_VOID_S:
-    // This instruction represents the implicit return at the end of a
-    // function body with no return value.
-    if (isVerbose()) {
-      OutStreamer->AddComment("fallthrough-return-void");
-      OutStreamer->AddBlankLine();
-    }
+  case WebAssembly::COMPILER_FENCE:
+    // This is a compiler barrier that prevents instruction reordering during
+    // backend compilation, and should not be emitted.
     break;
   case WebAssembly::EXTRACT_EXCEPTION_I32:
   case WebAssembly::EXTRACT_EXCEPTION_I32_S:
@@ -333,14 +381,11 @@ void WebAssemblyAsmPrinter::EmitInstruction(const MachineInstr *MI) {
 }
 
 bool WebAssemblyAsmPrinter::PrintAsmOperand(const MachineInstr *MI,
-                                            unsigned OpNo, unsigned AsmVariant,
+                                            unsigned OpNo,
                                             const char *ExtraCode,
                                             raw_ostream &OS) {
-  if (AsmVariant != 0)
-    report_fatal_error("There are no defined alternate asm variants");
-
   // First try the generic code, which knows about modifiers like 'c' and 'n'.
-  if (!AsmPrinter::PrintAsmOperand(MI, OpNo, AsmVariant, ExtraCode, OS))
+  if (!AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, OS))
     return false;
 
   if (!ExtraCode) {
@@ -356,8 +401,7 @@ bool WebAssemblyAsmPrinter::PrintAsmOperand(const MachineInstr *MI,
       OS << regToString(MO);
       return false;
     case MachineOperand::MO_GlobalAddress:
-      getSymbol(MO.getGlobal())->print(OS, MAI);
-      printOffset(MO.getOffset(), OS);
+      PrintSymbolOperand(MO, OS);
       return false;
     case MachineOperand::MO_ExternalSymbol:
       GetExternalSymbolSymbol(MO.getSymbolName())->print(OS, MAI);
@@ -376,23 +420,19 @@ bool WebAssemblyAsmPrinter::PrintAsmOperand(const MachineInstr *MI,
 
 bool WebAssemblyAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
                                                   unsigned OpNo,
-                                                  unsigned AsmVariant,
                                                   const char *ExtraCode,
                                                   raw_ostream &OS) {
-  if (AsmVariant != 0)
-    report_fatal_error("There are no defined alternate asm variants");
-
   // The current approach to inline asm is that "r" constraints are expressed
   // as local indices, rather than values on the operand stack. This simplifies
   // using "r" as it eliminates the need to push and pop the values in a
   // particular order, however it also makes it impossible to have an "m"
   // constraint. So we don't support it.
 
-  return AsmPrinter::PrintAsmMemoryOperand(MI, OpNo, AsmVariant, ExtraCode, OS);
+  return AsmPrinter::PrintAsmMemoryOperand(MI, OpNo, ExtraCode, OS);
 }
 
 // Force static initialization.
-extern "C" void LLVMInitializeWebAssemblyAsmPrinter() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeWebAssemblyAsmPrinter() {
   RegisterAsmPrinter<WebAssemblyAsmPrinter> X(getTheWebAssemblyTarget32());
   RegisterAsmPrinter<WebAssemblyAsmPrinter> Y(getTheWebAssemblyTarget64());
 }

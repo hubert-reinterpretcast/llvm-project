@@ -1,4 +1,4 @@
-//===-- SystemRuntime.cpp ---------------------------------------*- C++ -*-===//
+//===-- SystemRuntime.cpp -------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -27,9 +27,7 @@ SystemRuntime *SystemRuntime::FindPlugin(Process *process) {
   return nullptr;
 }
 
-//----------------------------------------------------------------------
 // SystemRuntime constructor
-//----------------------------------------------------------------------
 SystemRuntime::SystemRuntime(Process *process)
     : m_process(process), m_types() {}
 

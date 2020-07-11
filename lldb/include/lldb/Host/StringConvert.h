@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_StringConvert_h_
-#define liblldb_StringConvert_h_
+#ifndef LLDB_HOST_STRINGCONVERT_H
+#define LLDB_HOST_STRINGCONVERT_H
 
 #include <stdint.h>
 
@@ -17,10 +17,8 @@ namespace lldb_private {
 
 namespace StringConvert {
 
-//----------------------------------------------------------------------
-/// @namespace StringConvert StringConvert.h "lldb/Host/StringConvert.h"
+/// \namespace StringConvert StringConvert.h "lldb/Host/StringConvert.h"
 /// Utility classes for converting strings into Integers
-//----------------------------------------------------------------------
 
 int32_t ToSInt32(const char *s, int32_t fail_value = 0, int base = 0,
                  bool *success_ptr = nullptr);

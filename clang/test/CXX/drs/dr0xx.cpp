@@ -316,15 +316,16 @@ namespace dr25 { // dr25: yes
 namespace dr26 { // dr26: yes
   struct A { A(A, const A & = A()); }; // expected-error {{must pass its first argument by reference}}
   struct B {
-    B(); // expected-note 0-1{{candidate}}
+    B();
+    // FIXME: In C++98, we diagnose this twice.
     B(const B &, B = B());
 #if __cplusplus <= 201402L
-    // expected-error@-2 {{no matching constructor}} expected-note@-2 {{candidate}} expected-note@-2 {{here}}
+    // expected-error@-2 1+{{recursive evaluation of default argument}} expected-note@-2 1+{{used here}}
 #endif
   };
   struct C {
     static C &f();
-    C(const C &, C = f()); // expected-error {{no matching constructor}} expected-note {{candidate}} expected-note {{here}}
+    C(const C &, C = f()); // expected-error {{recursive evaluation of default argument}} expected-note {{used here}}
   };
 }
 
@@ -869,18 +870,17 @@ namespace dr68 { // dr68: yes
 }
 
 namespace dr69 { // dr69: yes
-  template<typename T> static void f() {}
+  template<typename T> static void f() {} // #dr69-f
   // FIXME: Should we warn here?
   inline void g() { f<int>(); }
-  // FIXME: This should be rejected, per [temp.explicit]p11.
-  extern template void f<char>();
+  extern template void f<char>(); // expected-error {{explicit instantiation declaration of 'f' with internal linkage}}
 #if __cplusplus < 201103L
   // expected-error@-2 {{C++11 extension}}
 #endif
   template<void(*)()> struct Q {};
   Q<&f<int> > q;
 #if __cplusplus < 201103L
-  // expected-error@-2 {{internal linkage}} expected-note@-11 {{here}}
+  // expected-error@-2 {{internal linkage}} expected-note@#dr69-f {{here}}
 #endif
 }
 

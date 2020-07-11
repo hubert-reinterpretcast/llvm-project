@@ -6,18 +6,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_ThreadGDBRemote_h_
-#define liblldb_ThreadGDBRemote_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_THREADGDBREMOTE_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_THREADGDBREMOTE_H
 
 #include <string>
 
-#include "lldb/Target/Process.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/StructuredData.h"
 
 class StringExtractor;
 
 namespace lldb_private {
+class Process;
+
 namespace process_gdb_remote {
 
 class ProcessGDBRemote;
@@ -115,4 +116,4 @@ protected:
 } // namespace process_gdb_remote
 } // namespace lldb_private
 
-#endif // liblldb_ThreadGDBRemote_h_
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_THREADGDBREMOTE_H

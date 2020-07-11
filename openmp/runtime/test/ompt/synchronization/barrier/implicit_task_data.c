@@ -3,7 +3,7 @@
 
 // This test checks that values stored in task_data in a barrier_begin event
 // are still present in the corresponding barrier_end event.
-// Therefore, callback implementations different from the ones in callback.h are neccessary.
+// Therefore, callback implementations different from the ones in callback.h are necessary.
 // This is a test for an issue reported in 
 // https://github.com/OpenMPToolsInterface/LLVM-openmp/issues/39
 
@@ -80,11 +80,11 @@ on_ompt_callback_sync_region(
   {
     case ompt_scope_begin:
       task_data->value = ompt_get_unique_id();
-      if(kind == ompt_sync_region_barrier)
+      if (kind == ompt_sync_region_barrier_implicit)
         printf("%" PRIu64 ": ompt_event_barrier_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
       break;
     case ompt_scope_end:
-      if(kind == ompt_sync_region_barrier)
+      if (kind == ompt_sync_region_barrier_implicit)
         printf("%" PRIu64 ": ompt_event_barrier_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, codeptr_ra);
       break;
   }
@@ -101,11 +101,15 @@ on_ompt_callback_sync_region_wait(
   switch(endpoint)
   {
     case ompt_scope_begin:
-      if(kind == ompt_sync_region_barrier)
-          printf("%" PRIu64 ": ompt_event_wait_barrier_begin: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, parallel_data->value, task_data->value, codeptr_ra);
+      if (kind == ompt_sync_region_barrier_implicit)
+        printf("%" PRIu64
+               ": ompt_event_wait_barrier_begin: parallel_id=%" PRIu64
+               ", task_id=%" PRIu64 ", codeptr_ra=%p\n",
+               ompt_get_thread_data()->value, parallel_data->value,
+               task_data->value, codeptr_ra);
       break;
     case ompt_scope_end:
-      if(kind == ompt_sync_region_barrier)
+      if (kind == ompt_sync_region_barrier_implicit)
         printf("%" PRIu64 ": ompt_event_wait_barrier_end: parallel_id=%" PRIu64 ", task_id=%" PRIu64 ", codeptr_ra=%p\n", ompt_get_thread_data()->value, (parallel_data)?parallel_data->value:0, task_data->value, codeptr_ra);
       break;
   }

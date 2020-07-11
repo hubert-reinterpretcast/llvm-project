@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueEnumeration_h_
-#define liblldb_OptionValueEnumeration_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUEENUMERATION_H
+#define LLDB_INTERPRETER_OPTIONVALUEENUMERATION_H
 
 #include "lldb/Core/UniqueCStringMap.h"
 #include "lldb/Interpreter/OptionValue.h"
@@ -33,9 +33,7 @@ public:
 
   ~OptionValueEnumeration() override;
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeEnum; }
 
@@ -57,12 +55,10 @@ public:
 
   lldb::OptionValueSP DeepCopy() const override;
 
-  size_t AutoComplete(CommandInterpreter &interpreter,
-                      CompletionRequest &request) override;
+  void AutoComplete(CommandInterpreter &interpreter,
+                    CompletionRequest &request) override;
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   enum_type operator=(enum_type value) {
     m_current_value = value;
@@ -87,4 +83,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueEnumeration_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUEENUMERATION_H

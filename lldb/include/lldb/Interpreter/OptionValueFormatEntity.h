@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueFormatEntity_h_
-#define liblldb_OptionValueFormatEntity_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUEFORMATENTITY_H
+#define LLDB_INTERPRETER_OPTIONVALUEFORMATENTITY_H
 
 #include "lldb/Core/FormatEntity.h"
 #include "lldb/Interpreter/OptionValue.h"
@@ -20,9 +20,7 @@ public:
 
   ~OptionValueFormatEntity() override {}
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeFormatEntity; }
 
@@ -40,12 +38,10 @@ public:
 
   lldb::OptionValueSP DeepCopy() const override;
 
-  size_t AutoComplete(CommandInterpreter &interpreter,
-                      CompletionRequest &request) override;
+  void AutoComplete(CommandInterpreter &interpreter,
+                    CompletionRequest &request) override;
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   FormatEntity::Entry &GetCurrentValue() { return m_current_entry; }
 
@@ -68,4 +64,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueFormatEntity_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUEFORMATENTITY_H

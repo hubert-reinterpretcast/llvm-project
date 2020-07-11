@@ -181,10 +181,10 @@ void hostfunc(void) { kernelfunc<<<1, 1>>>(1, 1, 1); }
 // Test that we've built a function to register kernels and global vars.
 // ALL: define internal void @__[[PREFIX]]_register_globals
 // ALL: call{{.*}}[[PREFIX]]RegisterFunction(i8** %0, {{.*}}kernelfunc{{[^,]*}}, {{[^@]*}}@0
-// ALL-DAG: call{{.*}}[[PREFIX]]RegisterVar(i8** %0, {{.*}}device_var{{[^,]*}}, {{[^@]*}}@1, {{.*}}i32 0, i32 4, i32 0, i32 0
-// ALL-DAG: call{{.*}}[[PREFIX]]RegisterVar(i8** %0, {{.*}}constant_var{{[^,]*}}, {{[^@]*}}@2, {{.*}}i32 0, i32 4, i32 1, i32 0
-// ALL-DAG: call{{.*}}[[PREFIX]]RegisterVar(i8** %0, {{.*}}ext_device_var_def{{[^,]*}}, {{[^@]*}}@3, {{.*}}i32 0, i32 4, i32 0, i32 0
-// ALL-DAG: call{{.*}}[[PREFIX]]RegisterVar(i8** %0, {{.*}}ext_constant_var_def{{[^,]*}}, {{[^@]*}}@4, {{.*}}i32 0, i32 4, i32 1, i32 0
+// ALL-DAG: call void {{.*}}[[PREFIX]]RegisterVar(i8** %0, {{.*}}device_var{{[^,]*}}, {{[^@]*}}@1, {{.*}}i32 0, {{i32|i64}} 4, i32 0, i32 0
+// ALL-DAG: call void {{.*}}[[PREFIX]]RegisterVar(i8** %0, {{.*}}constant_var{{[^,]*}}, {{[^@]*}}@2, {{.*}}i32 0, {{i32|i64}} 4, i32 1, i32 0
+// ALL-DAG: call void {{.*}}[[PREFIX]]RegisterVar(i8** %0, {{.*}}ext_device_var_def{{[^,]*}}, {{[^@]*}}@3, {{.*}}i32 0, {{i32|i64}} 4, i32 0, i32 0
+// ALL-DAG: call void {{.*}}[[PREFIX]]RegisterVar(i8** %0, {{.*}}ext_constant_var_def{{[^,]*}}, {{[^@]*}}@4, {{.*}}i32 0, {{i32|i64}} 4, i32 1, i32 0
 // ALL: ret void
 
 // Test that we've built a constructor.
@@ -227,14 +227,14 @@ void hostfunc(void) { kernelfunc<<<1, 1>>>(1, 1, 1); }
 // There should be no __[[PREFIX]]_register_globals if we have no
 // device-side globals, but we still need to register GPU binary.
 // Skip GPU binary string first.
-// CUDANOGLOBALS: @{{.*}} = private constant{{.*}}
-// HIPNOGLOBALS: @{{.*}} = internal constant{{.*}}
+// CUDANOGLOBALS-NOT: @{{.*}} = private constant{{.*}}
+// HIPNOGLOBALS-NOT: @{{.*}} = internal constant{{.*}}
 // NOGLOBALS-NOT: define internal void @__{{.*}}_register_globals
-// NOGLOBALS: define internal void @__[[PREFIX:cuda|hip]]_module_ctor
-// NOGLOBALS: call{{.*}}[[PREFIX]]RegisterFatBinary{{.*}}__[[PREFIX]]_fatbin_wrapper
+// NOGLOBALS-NOT: define internal void @__[[PREFIX:cuda|hip]]_module_ctor
+// NOGLOBALS-NOT: call{{.*}}[[PREFIX]]RegisterFatBinary{{.*}}__[[PREFIX]]_fatbin_wrapper
 // NOGLOBALS-NOT: call void @__[[PREFIX]]_register_globals
-// NOGLOBALS: define internal void @__[[PREFIX]]_module_dtor
-// NOGLOBALS: call void @__[[PREFIX]]UnregisterFatBinary
+// NOGLOBALS-NOT: define internal void @__[[PREFIX]]_module_dtor
+// NOGLOBALS-NOT: call void @__[[PREFIX]]UnregisterFatBinary
 
 // There should be no constructors/destructors if we have no GPU binary.
 // NOGPUBIN-NOT: define internal void @__[[PREFIX]]_register_globals

@@ -95,6 +95,7 @@
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -103,6 +104,9 @@
 #include <utility>
 
 namespace llvm {
+
+/// Enables memory ssa as a dependency for loop passes.
+extern cl::opt<bool> EnableMSSALoopDependency;
 
 class Function;
 class Instruction;
@@ -495,14 +499,11 @@ public:
   using const_block_iterator = BasicBlock *const *;
 
   block_iterator block_begin() {
-    auto *Ref = reinterpret_cast<Use::UserRef *>(op_begin() + ReservedSpace);
-    return reinterpret_cast<block_iterator>(Ref + 1);
+    return reinterpret_cast<block_iterator>(op_begin() + ReservedSpace);
   }
 
   const_block_iterator block_begin() const {
-    const auto *Ref =
-        reinterpret_cast<const Use::UserRef *>(op_begin() + ReservedSpace);
-    return reinterpret_cast<const_block_iterator>(Ref + 1);
+    return reinterpret_cast<const_block_iterator>(op_begin() + ReservedSpace);
   }
 
   block_iterator block_end() { return block_begin() + getNumOperands(); }
@@ -700,6 +701,11 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(MemoryPhi, MemoryAccess)
 class MemorySSA {
 public:
   MemorySSA(Function &, AliasAnalysis *, DominatorTree *);
+
+  // MemorySSA must remain where it's constructed; Walkers it creates store
+  // pointers to it.
+  MemorySSA(MemorySSA &&) = delete;
+
   ~MemorySSA();
 
   MemorySSAWalker *getWalker();
@@ -716,6 +722,8 @@ public:
   MemoryPhi *getMemoryAccess(const BasicBlock *BB) const {
     return cast_or_null<MemoryPhi>(ValueToMemoryAccess.lookup(cast<Value>(BB)));
   }
+
+  DominatorTree &getDomTree() const { return *DT; }
 
   void dump() const;
   void print(raw_ostream &) const;
@@ -777,7 +785,7 @@ public:
 
   /// Used in various insertion functions to specify whether we are talking
   /// about the beginning or end of a block.
-  enum InsertionPlace { Beginning, End };
+  enum InsertionPlace { Beginning, End, BeforeTerminator };
 
 protected:
   // Used by Memory SSA annotater, dumpers, and wrapper pass
@@ -785,10 +793,9 @@ protected:
   friend class MemorySSAPrinterLegacyPass;
   friend class MemorySSAUpdater;
 
-  void verifyDefUses(Function &F) const;
-  void verifyDomination(Function &F) const;
-  void verifyOrdering(Function &F) const;
+  void verifyOrderingDominationAndDefUses(Function &F) const;
   void verifyDominationNumbers(const Function &F) const;
+  void verifyPrevDefInPhis(Function &F) const;
 
   // This is used by the use optimizer and updater.
   AccessList *getWritableBlockAccesses(const BasicBlock *BB) const {
@@ -822,16 +829,17 @@ protected:
   void insertIntoListsBefore(MemoryAccess *, const BasicBlock *,
                              AccessList::iterator);
   MemoryUseOrDef *createDefinedAccess(Instruction *, MemoryAccess *,
-                                      const MemoryUseOrDef *Template = nullptr);
+                                      const MemoryUseOrDef *Template = nullptr,
+                                      bool CreationMustSucceed = true);
 
 private:
-  class ClobberWalkerBase;
-  class CachingWalker;
-  class SkipSelfWalker;
+  template <class AliasAnalysisType> class ClobberWalkerBase;
+  template <class AliasAnalysisType> class CachingWalker;
+  template <class AliasAnalysisType> class SkipSelfWalker;
   class OptimizeUses;
 
-  CachingWalker *getWalkerImpl();
-  void buildMemorySSA();
+  CachingWalker<AliasAnalysis> *getWalkerImpl();
+  void buildMemorySSA(BatchAAResults &BAA);
   void optimizeUses();
 
   void prepareForMoveTo(MemoryAccess *, BasicBlock *);
@@ -845,7 +853,8 @@ private:
   void markUnreachableAsLiveOnEntry(BasicBlock *BB);
   bool dominatesUse(const MemoryAccess *, const MemoryAccess *) const;
   MemoryPhi *createMemoryPhi(BasicBlock *BB);
-  MemoryUseOrDef *createNewAccess(Instruction *,
+  template <typename AliasAnalysisType>
+  MemoryUseOrDef *createNewAccess(Instruction *, AliasAnalysisType *,
                                   const MemoryUseOrDef *Template = nullptr);
   MemoryAccess *findDominatingDef(BasicBlock *, enum InsertionPlace);
   void placePHINodes(const SmallPtrSetImpl<BasicBlock *> &);
@@ -881,9 +890,9 @@ private:
   mutable DenseMap<const MemoryAccess *, unsigned long> BlockNumbering;
 
   // Memory SSA building info
-  std::unique_ptr<ClobberWalkerBase> WalkerBase;
-  std::unique_ptr<CachingWalker> Walker;
-  std::unique_ptr<SkipSelfWalker> SkipWalker;
+  std::unique_ptr<ClobberWalkerBase<AliasAnalysis>> WalkerBase;
+  std::unique_ptr<CachingWalker<AliasAnalysis>> Walker;
+  std::unique_ptr<SkipSelfWalker<AliasAnalysis>> SkipWalker;
   unsigned NextID;
 };
 
@@ -927,6 +936,9 @@ public:
     MemorySSA &getMSSA() { return *MSSA.get(); }
 
     std::unique_ptr<MemorySSA> MSSA;
+
+    bool invalidate(Function &F, const PreservedAnalyses &PA,
+                    FunctionAnalysisManager::Invalidator &Inv);
   };
 
   Result run(Function &F, FunctionAnalysisManager &AM);
@@ -1039,8 +1051,6 @@ public:
   /// the walker it uses or returns.
   virtual void invalidateInfo(MemoryAccess *) {}
 
-  virtual void verify(const MemorySSA *MSSA) { assert(MSSA == this->MSSA); }
-
 protected:
   friend class MemorySSA; // For updating MSSA pointer in MemorySSA move
                           // constructor.
@@ -1096,15 +1106,15 @@ public:
     assert(Access && "Tried to access past the end of our iterator");
     // Go to the first argument for phis, and the defining access for everything
     // else.
-    if (MemoryPhi *MP = dyn_cast<MemoryPhi>(Access))
+    if (const MemoryPhi *MP = dyn_cast<MemoryPhi>(Access))
       return MP->getIncomingValue(ArgNo);
     return cast<MemoryUseOrDef>(Access)->getDefiningAccess();
   }
 
   using BaseT::operator++;
-  memoryaccess_def_iterator &operator++() {
+  memoryaccess_def_iterator_base &operator++() {
     assert(Access && "Hit end of iterator");
-    if (MemoryPhi *MP = dyn_cast<MemoryPhi>(Access)) {
+    if (const MemoryPhi *MP = dyn_cast<MemoryPhi>(Access)) {
       if (++ArgNo >= MP->getNumIncomingValues()) {
         ArgNo = 0;
         Access = nullptr;
@@ -1171,9 +1181,9 @@ class upward_defs_iterator
   using BaseT = upward_defs_iterator::iterator_facade_base;
 
 public:
-  upward_defs_iterator(const MemoryAccessPair &Info)
+  upward_defs_iterator(const MemoryAccessPair &Info, DominatorTree *DT)
       : DefIterator(Info.first), Location(Info.second),
-        OriginalAccess(Info.first) {
+        OriginalAccess(Info.first), DT(DT) {
     CurrentPair.first = nullptr;
 
     WalkingPhi = Info.first && isa<MemoryPhi>(Info.first);
@@ -1212,12 +1222,16 @@ private:
           const_cast<Value *>(Location.Ptr),
           OriginalAccess->getBlock()->getModule()->getDataLayout(), nullptr);
       if (!Translator.PHITranslateValue(OriginalAccess->getBlock(),
-                                        DefIterator.getPhiArgBlock(), nullptr,
-                                        false))
+                                        DefIterator.getPhiArgBlock(), DT,
+                                        false)) {
         if (Translator.getAddr() != Location.Ptr) {
           CurrentPair.second = Location.getWithNewPtr(Translator.getAddr());
           return;
         }
+      } else {
+        CurrentPair.second = Location.getWithNewSize(LocationSize::unknown());
+        return;
+      }
     }
     CurrentPair.second = Location;
   }
@@ -1227,17 +1241,19 @@ private:
   MemoryLocation Location;
   MemoryAccess *OriginalAccess = nullptr;
   bool WalkingPhi = false;
+  DominatorTree *DT = nullptr;
 };
 
-inline upward_defs_iterator upward_defs_begin(const MemoryAccessPair &Pair) {
-  return upward_defs_iterator(Pair);
+inline upward_defs_iterator upward_defs_begin(const MemoryAccessPair &Pair,
+                                              DominatorTree &DT) {
+  return upward_defs_iterator(Pair, &DT);
 }
 
 inline upward_defs_iterator upward_defs_end() { return upward_defs_iterator(); }
 
 inline iterator_range<upward_defs_iterator>
-upward_defs(const MemoryAccessPair &Pair) {
-  return make_range(upward_defs_begin(Pair), upward_defs_end());
+upward_defs(const MemoryAccessPair &Pair, DominatorTree &DT) {
+  return make_range(upward_defs_begin(Pair, DT), upward_defs_end());
 }
 
 /// Walks the defining accesses of MemoryDefs. Stops after we hit something that

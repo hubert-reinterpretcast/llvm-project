@@ -130,9 +130,21 @@ public:
 
   /// Get the name of this option with the default prefix.
   std::string getPrefixedName() const {
-    std::string Ret = getPrefix();
+    std::string Ret(getPrefix());
     Ret += getName();
     return Ret;
+  }
+
+  /// Get the help text for this option.
+  StringRef getHelpText() const {
+    assert(Info && "Must have a valid info!");
+    return Info->HelpText;
+  }
+
+  /// Get the meta-variable list for this option.
+  StringRef getMetaVar() const {
+    assert(Info && "Must have a valid info!");
+    return Info->MetaVar;
   }
 
   unsigned getNumArgs() const { return Info->Param; }
@@ -206,6 +218,11 @@ public:
   ///                start.
   Arg *accept(const ArgList &Args, unsigned &Index, unsigned ArgSize) const;
 
+private:
+  Arg *acceptInternal(const ArgList &Args, unsigned &Index,
+                      unsigned ArgSize) const;
+
+public:
   void print(raw_ostream &O) const;
   void dump() const;
 };

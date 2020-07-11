@@ -11,7 +11,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/WarnMissedTransforms.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 
 using namespace llvm;
@@ -92,7 +94,7 @@ PreservedAnalyses
 WarnMissedTransformationsPass::run(Function &F, FunctionAnalysisManager &AM) {
   // Do not warn about not applied transformations if optimizations are
   // disabled.
-  if (F.hasFnAttribute(Attribute::OptimizeNone))
+  if (F.hasOptNone())
     return PreservedAnalyses::all();
 
   auto &ORE = AM.getResult<OptimizationRemarkEmitterAnalysis>(F);

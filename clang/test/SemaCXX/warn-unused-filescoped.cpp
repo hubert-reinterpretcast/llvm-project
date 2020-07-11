@@ -164,9 +164,9 @@ namespace unused {
 }
 
 namespace test6 {
-  typedef struct {
-    void bar();
-  } A;
+  typedef struct { // expected-warning {{add a tag name}}
+    void bar(); // expected-note {{}}
+  } A; // expected-note {{}}
 
   typedef struct {
     void bar();  // expected-warning {{unused member function 'bar'}}
@@ -207,8 +207,9 @@ static void completeRedeclChainForTemplateSpecialization() { } // expected-warni
 
 namespace test10 {
 #if __cplusplus >= 201103L
+// FIXME: Warn on template definitions with no instantiations?
 template<class T>
-constexpr T pi = T(3.14); // expected-warning {{unused}}
+constexpr T pi = T(3.14);
 #endif
 }
 

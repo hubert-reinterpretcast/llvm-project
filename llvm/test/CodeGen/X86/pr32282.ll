@@ -18,10 +18,9 @@ define void @foo(i64 %x) nounwind {
 ; X86-NEXT:    movl d+4, %ecx
 ; X86-NEXT:    notl %ecx
 ; X86-NEXT:    andl $701685459, %ecx # imm = 0x29D2DED3
-; X86-NEXT:    andl $-564453154, %eax # imm = 0xDE5B20DE
+; X86-NEXT:    andl $-566231040, %eax # imm = 0xDE400000
 ; X86-NEXT:    shrdl $21, %ecx, %eax
 ; X86-NEXT:    shrl $21, %ecx
-; X86-NEXT:    andl $-2, %eax
 ; X86-NEXT:    addl $7, %eax
 ; X86-NEXT:    adcl $0, %ecx
 ; X86-NEXT:    pushl %ecx

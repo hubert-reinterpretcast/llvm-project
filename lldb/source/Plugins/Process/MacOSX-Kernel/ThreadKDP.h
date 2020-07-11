@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_ThreadKDP_h_
-#define liblldb_ThreadKDP_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_MACOSX_KERNEL_THREADKDP_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_MACOSX_KERNEL_THREADKDP_H
 
 #include <string>
 
@@ -60,17 +60,13 @@ public:
 protected:
   friend class ProcessKDP;
 
-  //------------------------------------------------------------------
   // Member variables.
-  //------------------------------------------------------------------
   std::string m_thread_name;
   std::string m_dispatch_queue_name;
   lldb::addr_t m_thread_dispatch_qaddr;
   lldb::StopInfoSP m_cached_stop_info_sp;
-  //------------------------------------------------------------------
   // Protected member functions.
-  //------------------------------------------------------------------
   virtual bool CalculateStopInfo();
 };
 
-#endif // liblldb_ThreadKDP_h_
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_MACOSX_KERNEL_THREADKDP_H

@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_DynamicLoaderDarwinKernel_h_
-#define liblldb_DynamicLoaderDarwinKernel_h_
+#ifndef LLDB_SOURCE_PLUGINS_DYNAMICLOADER_DARWIN_KERNEL_DYNAMICLOADERDARWINKERNEL_H
+#define LLDB_SOURCE_PLUGINS_DYNAMICLOADER_DARWIN_KERNEL_DYNAMICLOADERDARWINKERNEL_H
 
 #include <mutex>
 #include <string>
@@ -28,9 +28,7 @@ public:
 
   ~DynamicLoaderDarwinKernel() override;
 
-  //------------------------------------------------------------------
   // Static Functions
-  //------------------------------------------------------------------
   static void Initialize();
 
   static void Terminate();
@@ -46,12 +44,10 @@ public:
 
   static lldb::addr_t SearchForDarwinKernel(lldb_private::Process *process);
 
-  //------------------------------------------------------------------
   /// Called after attaching a process.
   ///
   /// Allow DynamicLoader plug-ins to execute some code after
   /// attaching to a process.
-  //------------------------------------------------------------------
   void DidAttach() override;
 
   void DidLaunch() override;
@@ -61,9 +57,7 @@ public:
 
   lldb_private::Status CanLoadImage() override;
 
-  //------------------------------------------------------------------
   // PluginInterface protocol
-  //------------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
@@ -246,7 +240,7 @@ protected:
       image_infos_addr = LLDB_INVALID_ADDRESS;
     }
 
-    bool IsValid() const { return version >= 1 || version <= 2; }
+    bool IsValid() const { return version >= 1 && version <= 2; }
   };
 
   void RegisterNotificationCallbacks();
@@ -283,11 +277,13 @@ protected:
   SearchForKernelViaExhaustiveSearch(lldb_private::Process *process);
 
   static bool
-  ReadMachHeader(lldb::addr_t addr, lldb_private::Process *process, llvm::MachO::mach_header &mh);
+  ReadMachHeader(lldb::addr_t addr, lldb_private::Process *process, llvm::MachO::mach_header &mh,
+                 bool *read_error = nullptr);
 
   static lldb_private::UUID
   CheckForKernelImageAtAddress(lldb::addr_t addr,
-                               lldb_private::Process *process);
+                               lldb_private::Process *process,
+                               bool *read_error = nullptr);
 
   lldb::addr_t m_kernel_load_address;
   KextImageInfo m_kernel; // Info about the current kernel image being used
@@ -300,7 +296,9 @@ protected:
   lldb::user_id_t m_break_id;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(DynamicLoaderDarwinKernel);
+  DynamicLoaderDarwinKernel(const DynamicLoaderDarwinKernel &) = delete;
+  const DynamicLoaderDarwinKernel &
+  operator=(const DynamicLoaderDarwinKernel &) = delete;
 };
 
-#endif // liblldb_DynamicLoaderDarwinKernel_h_
+#endif // LLDB_SOURCE_PLUGINS_DYNAMICLOADER_DARWIN_KERNEL_DYNAMICLOADERDARWINKERNEL_H

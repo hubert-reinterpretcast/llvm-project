@@ -1,5 +1,4 @@
-//===-- DynamicLoaderWindowsDYLD.cpp --------------------------------*- C++
-//-*-===//
+//===-- DynamicLoaderWindowsDYLD.cpp --------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -23,6 +22,8 @@
 
 using namespace lldb;
 using namespace lldb_private;
+
+LLDB_PLUGIN_DEFINE(DynamicLoaderWindowsDYLD)
 
 DynamicLoaderWindowsDYLD::DynamicLoaderWindowsDYLD(Process *process)
     : DynamicLoader(process) {}
@@ -68,11 +69,9 @@ void DynamicLoaderWindowsDYLD::OnLoadModule(lldb::ModuleSP module_sp,
 
   // Resolve the module unless we already have one.
   if (!module_sp) {
-    // Confusingly, there is no Target::AddSharedModule.  Instead, calling
-    // GetSharedModule() with a new module will add it to the module list and
-    // return a corresponding ModuleSP.
     Status error;
-    module_sp = m_process->GetTarget().GetSharedModule(module_spec, &error);
+    module_sp = m_process->GetTarget().GetOrCreateModule(module_spec, 
+                                             true /* notify */, &error);
     if (error.Fail())
       return;
   }
@@ -124,38 +123,37 @@ lldb::addr_t DynamicLoaderWindowsDYLD::GetLoadAddress(ModuleSP executable) {
 
 void DynamicLoaderWindowsDYLD::DidAttach() {
     Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_DYNAMIC_LOADER));
-  if (log)
-    log->Printf("DynamicLoaderWindowsDYLD::%s()", __FUNCTION__);
+    LLDB_LOGF(log, "DynamicLoaderWindowsDYLD::%s()", __FUNCTION__);
 
-  ModuleSP executable = GetTargetExecutable();
+    ModuleSP executable = GetTargetExecutable();
 
-  if (!executable.get())
-    return;
+    if (!executable.get())
+      return;
 
-  // Try to fetch the load address of the file from the process, since there
-  // could be randomization of the load address.
-  lldb::addr_t load_addr = GetLoadAddress(executable);
-  if (load_addr == LLDB_INVALID_ADDRESS)
-    return;
+    // Try to fetch the load address of the file from the process, since there
+    // could be randomization of the load address.
+    lldb::addr_t load_addr = GetLoadAddress(executable);
+    if (load_addr == LLDB_INVALID_ADDRESS)
+      return;
 
-  // Request the process base address.
-  lldb::addr_t image_base = m_process->GetImageInfoAddress();
-  if (image_base == load_addr)
-    return;
+    // Request the process base address.
+    lldb::addr_t image_base = m_process->GetImageInfoAddress();
+    if (image_base == load_addr)
+      return;
 
-  // Rebase the process's modules if there is a mismatch.
-  UpdateLoadedSections(executable, LLDB_INVALID_ADDRESS, load_addr, false);
+    // Rebase the process's modules if there is a mismatch.
+    UpdateLoadedSections(executable, LLDB_INVALID_ADDRESS, load_addr, false);
 
-  ModuleList module_list;
-  module_list.Append(executable);
-  m_process->GetTarget().ModulesDidLoad(module_list);
-  m_process->LoadModules();
+    ModuleList module_list;
+    module_list.Append(executable);
+    m_process->GetTarget().ModulesDidLoad(module_list);
+    auto error = m_process->LoadModules();
+    LLDB_LOG_ERROR(log, std::move(error), "failed to load modules: {0}");
 }
 
 void DynamicLoaderWindowsDYLD::DidLaunch() {
   Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_DYNAMIC_LOADER));
-  if (log)
-    log->Printf("DynamicLoaderWindowsDYLD::%s()", __FUNCTION__);
+  LLDB_LOGF(log, "DynamicLoaderWindowsDYLD::%s()", __FUNCTION__);
 
   ModuleSP executable = GetTargetExecutable();
   if (!executable.get())
@@ -169,7 +167,8 @@ void DynamicLoaderWindowsDYLD::DidLaunch() {
     ModuleList module_list;
     module_list.Append(executable);
     m_process->GetTarget().ModulesDidLoad(module_list);
-    m_process->LoadModules();
+    auto error = m_process->LoadModules();
+    LLDB_LOG_ERROR(log, std::move(error), "failed to load modules: {0}");
   }
 }
 
@@ -193,9 +192,8 @@ DynamicLoaderWindowsDYLD::GetStepThroughTrampolinePlan(Thread &thread,
   // Max size of an instruction in x86 is 15 bytes.
   AddressRange range(pc, 2 * 15);
 
-  ExecutionContext exe_ctx(m_process->GetTarget());
   DisassemblerSP disassembler_sp = Disassembler::DisassembleRange(
-      arch, nullptr, nullptr, exe_ctx, range, true);
+      arch, nullptr, nullptr, m_process->GetTarget(), range, true);
   if (!disassembler_sp) {
     return ThreadPlanSP();
   }
@@ -214,6 +212,7 @@ DynamicLoaderWindowsDYLD::GetStepThroughTrampolinePlan(Thread &thread,
   auto first_insn = insn_list->GetInstructionAtIndex(0);
   auto second_insn = insn_list->GetInstructionAtIndex(1);
 
+  ExecutionContext exe_ctx(m_process->GetTarget());
   if (first_insn == nullptr || second_insn == nullptr ||
       strcmp(first_insn->GetMnemonic(&exe_ctx), "jmpl") != 0 ||
       strcmp(second_insn->GetMnemonic(&exe_ctx), "nop") != 0) {

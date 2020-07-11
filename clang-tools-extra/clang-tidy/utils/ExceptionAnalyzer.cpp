@@ -125,13 +125,13 @@ ExceptionAnalyzer::ExceptionInfo ExceptionAnalyzer::throwsException(
 
   auto Result = ExceptionInfo::createUnknown();
   if (const auto *FPT = Func->getType()->getAs<FunctionProtoType>()) {
-    for (const QualType Ex : FPT->exceptions())
+    for (const QualType &Ex : FPT->exceptions())
       Result.registerException(Ex.getTypePtr());
   }
   return Result;
 }
 
-/// Analyzes a single statment on it's throwing behaviour. This is in principle
+/// Analyzes a single statement on it's throwing behaviour. This is in principle
 /// possible except some 'Unknown' functions are called.
 ExceptionAnalyzer::ExceptionInfo ExceptionAnalyzer::throwsException(
     const Stmt *St, const ExceptionInfo::Throwables &Caught,
@@ -205,7 +205,7 @@ ExceptionAnalyzer::ExceptionInfo ExceptionAnalyzer::throwsException(
 }
 
 ExceptionAnalyzer::ExceptionInfo
-ExceptionAnalyzer::analyze(const FunctionDecl *Func) {
+ExceptionAnalyzer::analyzeImpl(const FunctionDecl *Func) {
   ExceptionInfo ExceptionList;
 
   // Check if the function has already been analyzed and reuse that result.
@@ -221,6 +221,20 @@ ExceptionAnalyzer::analyze(const FunctionDecl *Func) {
   } else
     ExceptionList = FunctionCache[Func];
 
+  return ExceptionList;
+}
+
+ExceptionAnalyzer::ExceptionInfo
+ExceptionAnalyzer::analyzeImpl(const Stmt *Stmt) {
+  llvm::SmallSet<const FunctionDecl *, 32> CallStack;
+  return throwsException(Stmt, ExceptionInfo::Throwables(), CallStack);
+}
+
+template <typename T>
+ExceptionAnalyzer::ExceptionInfo
+ExceptionAnalyzer::analyzeDispatch(const T *Node) {
+  ExceptionInfo ExceptionList = analyzeImpl(Node);
+
   if (ExceptionList.getBehaviour() == State::NotThrowing ||
       ExceptionList.getBehaviour() == State::Unknown)
     return ExceptionList;
@@ -231,6 +245,17 @@ ExceptionAnalyzer::analyze(const FunctionDecl *Func) {
 
   return ExceptionList;
 }
+
+ExceptionAnalyzer::ExceptionInfo
+ExceptionAnalyzer::analyze(const FunctionDecl *Func) {
+  return analyzeDispatch(Func);
+}
+
+ExceptionAnalyzer::ExceptionInfo
+ExceptionAnalyzer::analyze(const Stmt *Stmt) {
+  return analyzeDispatch(Stmt);
+}
+
 } // namespace utils
 } // namespace tidy
 

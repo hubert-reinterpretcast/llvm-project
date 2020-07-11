@@ -18,11 +18,12 @@ namespace driver {
 namespace tools {
 namespace wasm {
 
-class LLVM_LIBRARY_VISIBILITY Linker : public GnuTool {
+class LLVM_LIBRARY_VISIBILITY Linker : public Tool {
 public:
-  explicit Linker(const ToolChain &TC);
-  bool isLinkJob() const override;
-  bool hasIntegratedCPP() const override;
+  explicit Linker(const ToolChain &TC) : Tool("wasm::Linker", "linker", TC) {}
+  bool isLinkJob() const override { return true; }
+  bool hasIntegratedCPP() const override { return false; }
+  std::string getLinkerPath(const llvm::opt::ArgList &Args) const;
   void ConstructJob(Compilation &C, const JobAction &JA,
                     const InputInfo &Output, const InputInfoList &Inputs,
                     const llvm::opt::ArgList &TCArgs,
@@ -64,7 +65,7 @@ private:
       llvm::opt::ArgStringList &CC1Args) const override;
   void AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
                            llvm::opt::ArgStringList &CmdArgs) const override;
-  std::string getThreadModel(const llvm::opt::ArgList &) const override;
+  SanitizerMask getSupportedSanitizers() const override;
 
   const char *getDefaultLinker() const override { return "wasm-ld"; }
 

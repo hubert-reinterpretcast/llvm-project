@@ -9,8 +9,8 @@
 #include "ConcatNestedNamespacesCheck.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/Lex/Lexer.h"
 #include <algorithm>
-#include <iterator>
 
 namespace clang {
 namespace tidy {
@@ -39,6 +39,7 @@ static bool alreadyConcatenated(std::size_t NumCandidates,
                                 const SourceRange &ReplacementRange,
                                 const SourceManager &Sources,
                                 const LangOptions &LangOpts) {
+  // FIXME: This logic breaks when there is a comment with ':'s in the middle.
   CharSourceRange TextRange =
       Lexer::getAsCharRange(ReplacementRange, Sources, LangOpts);
   StringRef CurrentNamespacesText =
@@ -62,9 +63,6 @@ ConcatNestedNamespacesCheck::concatNamespaces() {
 
 void ConcatNestedNamespacesCheck::registerMatchers(
     ast_matchers::MatchFinder *Finder) {
-  if (!getLangOpts().CPlusPlus17)
-    return;
-
   Finder->addMatcher(ast_matchers::namespaceDecl().bind("namespace"), this);
 }
 

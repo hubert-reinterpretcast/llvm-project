@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_RegisterContextHistory_h_
-#define lldb_RegisterContextHistory_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_REGISTERCONTEXTHISTORY_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_REGISTERCONTEXTHISTORY_H
 
 #include <vector>
 
@@ -51,17 +51,17 @@ public:
                                                uint32_t num) override;
 
 private:
-  //------------------------------------------------------------------
   // For RegisterContextLLDB only
-  //------------------------------------------------------------------
 
   lldb_private::RegisterSet m_reg_set0; // register set 0 (PC only)
   lldb_private::RegisterInfo m_pc_reg_info;
 
   lldb::addr_t m_pc_value;
 
-  DISALLOW_COPY_AND_ASSIGN(RegisterContextHistory);
+  RegisterContextHistory(const RegisterContextHistory &) = delete;
+  const RegisterContextHistory &
+  operator=(const RegisterContextHistory &) = delete;
 };
 } // namespace lldb_private
 
-#endif // lldb_RegisterContextHistory_h_
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_REGISTERCONTEXTHISTORY_H

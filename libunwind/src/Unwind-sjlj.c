@@ -39,7 +39,7 @@ struct _Unwind_FunctionContext {
   uint32_t                        resumeParameters[4];
 
   // set by calling function before registering
-  __personality_routine           personality; // arm offset=24
+  _Unwind_Personality_Fn personality;          // arm offset=24
   uintptr_t                       lsda;        // arm offset=28
 
   // variable length array, contains registers to restore
@@ -177,9 +177,10 @@ unwind_phase2(struct _Unwind_Exception *exception_object) {
 
     // check for no more frames
     if (c == NULL) {
-      _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): unw_step() reached "
-                                 "bottom => _URC_END_OF_STACK",
-                                 (void *)exception_object);
+      _LIBUNWIND_TRACE_UNWINDING(
+          "unwind_phase2(ex_ojb=%p): __unw_step() reached "
+          "bottom => _URC_END_OF_STACK",
+          (void *)exception_object);
       return _URC_END_OF_STACK;
     }
 
@@ -215,7 +216,7 @@ unwind_phase2(struct _Unwind_Exception *exception_object) {
         // we may get control back if landing pad calls _Unwind_Resume()
         __Unwind_SjLj_SetTopOfFunctionStack(c);
         __builtin_longjmp(c->jbuf, 1);
-        // unw_resume() only returns if there was an error
+        // __unw_resume() only returns if there was an error
         return _URC_FATAL_PHASE2_ERROR;
       default:
         // something went wrong
@@ -242,9 +243,10 @@ unwind_phase2_forced(struct _Unwind_Exception *exception_object,
 
     // get next frame (skip over first which is _Unwind_RaiseException)
     if (c == NULL) {
-      _LIBUNWIND_TRACE_UNWINDING("unwind_phase2(ex_ojb=%p): unw_step() reached "
-                                 "bottom => _URC_END_OF_STACK",
-                                 (void *)exception_object);
+      _LIBUNWIND_TRACE_UNWINDING(
+          "unwind_phase2(ex_ojb=%p): __unw_step() reached "
+          "bottom => _URC_END_OF_STACK",
+          (void *)exception_object);
       return _URC_END_OF_STACK;
     }
 
@@ -266,7 +268,7 @@ unwind_phase2_forced(struct _Unwind_Exception *exception_object,
 
     // if there is a personality routine, tell it we are unwinding
     if (c->personality != NULL) {
-      __personality_routine p = (__personality_routine) c->personality;
+      _Unwind_Personality_Fn p = (_Unwind_Personality_Fn)c->personality;
       _LIBUNWIND_TRACE_UNWINDING("unwind_phase2_forced(ex_ojb=%p): "
                                  "calling personality function %p",
                                  (void *)exception_object, (void *)p);

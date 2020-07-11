@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++03, c++11, c++14, c++17
 
 // <chrono>
 // class year_month_weekday_last;
@@ -22,7 +22,6 @@
 
 #include "test_macros.h"
 
-#include <iostream>
 
 constexpr bool testConstexprYears(std::chrono::year_month_weekday_last ym)
 {

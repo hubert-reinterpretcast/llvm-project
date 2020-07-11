@@ -1,5 +1,4 @@
-; RUN: llc -mcpu=pwr9 -mtriple=powerpc64le-unknown-unknown \
-; RUN:   -enable-ppc-quad-precision -ppc-vsr-nums-as-vr \
+; RUN: llc -mcpu=pwr9 -mtriple=powerpc64le-unknown-unknown -ppc-vsr-nums-as-vr \
 ; RUN:   -verify-machineinstrs -ppc-asm-full-reg-names < %s | FileCheck %s
 
 ; Function Attrs: norecurse nounwind readnone
@@ -85,6 +84,7 @@ define fp128 @maxVecParam(fp128 %p1, fp128 %p2, fp128 %p3, fp128 %p4, fp128 %p5,
 ; CHECK-LABEL: maxVecParam:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    xsaddqp v2, v2, v3
+; CHECK-NEXT:    lxv v[[REG0:[0-9]+]], 224(r1)
 ; CHECK-NEXT:    xsaddqp v2, v2, v4
 ; CHECK-NEXT:    xsaddqp v2, v2, v5
 ; CHECK-NEXT:    xsaddqp v2, v2, v6
@@ -95,7 +95,6 @@ define fp128 @maxVecParam(fp128 %p1, fp128 %p2, fp128 %p3, fp128 %p4, fp128 %p5,
 ; CHECK-NEXT:    xsaddqp v2, v2, v11
 ; CHECK-NEXT:    xsaddqp v2, v2, v12
 ; CHECK-NEXT:    xsaddqp v2, v2, v13
-; CHECK-NEXT:    lxv v[[REG0:[0-9]+]], 224(r1)
 ; CHECK-NEXT:    xssubqp v2, v2, v[[REG0]]
 ; CHECK-NEXT:    blr
                           fp128 %p6, fp128 %p7, fp128 %p8, fp128 %p9, fp128 %p10,

@@ -15,34 +15,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "polly/CodeGen/CodeGeneration.h"
-#include "polly/CodeGen/IslAst.h"
-#include "polly/CodeGen/IslNodeBuilder.h"
+#include "polly/CodeGen/IRBuilder.h"
 #include "polly/CodeGen/PPCGCodeGeneration.h"
-#include "polly/CodeGen/Utils.h"
 #include "polly/DependenceInfo.h"
 #include "polly/LinkAllPasses.h"
 #include "polly/Options.h"
 #include "polly/ScopDetection.h"
-#include "polly/ScopInfo.h"
-#include "polly/Support/SCEVValidator.h"
-#include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/BasicAliasAnalysis.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/Analysis/CaptureTracking.h"
-#include "llvm/Analysis/GlobalsModRef.h"
-#include "llvm/Analysis/ScalarEvolutionAliasAnalysis.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/IR/LegacyPassManager.h"
-#include "llvm/IR/Verifier.h"
-#include "llvm/IRReader/IRReader.h"
-#include "llvm/Linker/Linker.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+
+using namespace polly;
 
 static cl::opt<bool> RewriteAllocas(
     "polly-acc-rewrite-allocas",
@@ -228,14 +212,14 @@ replaceGlobalArray(Module &M, const DataLayout &DL, GlobalVariable &Array,
   // At this point, we have committed to replacing this array.
   ReplacedGlobals.insert(&Array);
 
-  std::string NewName = Array.getName();
+  std::string NewName = Array.getName().str();
   NewName += ".toptr";
   GlobalVariable *ReplacementToArr =
       cast<GlobalVariable>(M.getOrInsertGlobal(NewName, ElemPtrTy));
   ReplacementToArr->setInitializer(ConstantPointerNull::get(ElemPtrTy));
 
   Function *PollyMallocManaged = getOrCreatePollyMallocManaged(M);
-  std::string FnName = Array.getName();
+  std::string FnName = Array.getName().str();
   FnName += ".constructor";
   PollyIRBuilder Builder(M.getContext());
   FunctionType *Ty = FunctionType::get(Builder.getVoidTy(), false);

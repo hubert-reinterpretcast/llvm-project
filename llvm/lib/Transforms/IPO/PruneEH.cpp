@@ -18,15 +18,16 @@
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Analysis/CallGraphSCCPass.h"
 #include "llvm/Analysis/EHPersonalities.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include <algorithm>
 using namespace llvm;
 
@@ -134,8 +135,8 @@ static bool runImpl(CallGraphSCC &SCC, CallGraph &CG) {
             SCCMightUnwind |= InstMightUnwind;
           }
           if (CheckReturnViaAsm && !SCCMightReturn)
-            if (auto ICS = ImmutableCallSite(&I))
-              if (const auto *IA = dyn_cast<InlineAsm>(ICS.getCalledValue()))
+            if (const auto *CB = dyn_cast<CallBase>(&I))
+              if (const auto *IA = dyn_cast<InlineAsm>(CB->getCalledOperand()))
                 if (IA->hasSideEffects())
                   SCCMightReturn = true;
         }
@@ -203,7 +204,8 @@ static bool SimplifyFunction(Function *F, CallGraph &CG) {
 
     for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E; )
       if (CallInst *CI = dyn_cast<CallInst>(I++))
-        if (CI->doesNotReturn() && !isa<UnreachableInst>(I)) {
+        if (CI->doesNotReturn() && !CI->isMustTailCall() &&
+            !isa<UnreachableInst>(I)) {
           // This call calls a function that cannot return.  Insert an
           // unreachable instruction after it and simplify the code.  Do this
           // by splitting the BB, adding the unreachable, then deleting the
@@ -241,12 +243,12 @@ static void DeleteBasicBlock(BasicBlock *BB, CallGraph &CG) {
       break;
     }
 
-    if (auto CS = CallSite (&*I)) {
-      const Function *Callee = CS.getCalledFunction();
+    if (auto *Call = dyn_cast<CallBase>(&*I)) {
+      const Function *Callee = Call->getCalledFunction();
       if (!Callee || !Intrinsic::isLeaf(Callee->getIntrinsicID()))
-        CGN->removeCallEdgeFor(CS);
+        CGN->removeCallEdgeFor(*Call);
       else if (!Callee->isIntrinsic())
-        CGN->removeCallEdgeFor(CS);
+        CGN->removeCallEdgeFor(*Call);
     }
 
     if (!I->use_empty())

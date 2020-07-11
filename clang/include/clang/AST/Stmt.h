@@ -14,12 +14,14 @@
 #define LLVM_CLANG_AST_STMT_H
 
 #include "clang/AST/DeclGroup.h"
+#include "clang/AST/DependenceFlags.h"
 #include "clang/AST/StmtIterator.h"
 #include "clang/Basic/CapturedStmt.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/SourceLocation.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/iterator.h"
@@ -46,6 +48,7 @@ class Attr;
 class CapturedDecl;
 class Decl;
 class Expr;
+class AddrLabelExpr;
 class LabelDecl;
 class ODRHash;
 class PrinterHelper;
@@ -91,6 +94,8 @@ protected:
   //===--- Statement bitfields classes ---===//
 
   class StmtBitfields {
+    friend class ASTStmtReader;
+    friend class ASTStmtWriter;
     friend class Stmt;
 
     /// The statement class.
@@ -306,12 +311,39 @@ protected:
 
     unsigned ValueKind : 2;
     unsigned ObjectKind : 3;
-    unsigned TypeDependent : 1;
-    unsigned ValueDependent : 1;
-    unsigned InstantiationDependent : 1;
-    unsigned ContainsUnexpandedParameterPack : 1;
+    unsigned /*ExprDependence*/ Dependent : llvm::BitWidth<ExprDependence>;
   };
-  enum { NumExprBits = NumStmtBits + 9 };
+  enum { NumExprBits = NumStmtBits + 5 + llvm::BitWidth<ExprDependence> };
+
+  class ConstantExprBitfields {
+    friend class ASTStmtReader;
+    friend class ASTStmtWriter;
+    friend class ConstantExpr;
+
+    unsigned : NumExprBits;
+
+    /// The kind of result that is tail-allocated.
+    unsigned ResultKind : 2;
+
+    /// The kind of Result as defined by APValue::Kind.
+    unsigned APValueKind : 4;
+
+    /// When ResultKind == RSK_Int64, true if the tail-allocated integer is
+    /// unsigned.
+    unsigned IsUnsigned : 1;
+
+    /// When ResultKind == RSK_Int64. the BitWidth of the tail-allocated
+    /// integer. 7 bits because it is the minimal number of bits to represent a
+    /// value from 0 to 64 (the size of the tail-allocated integer).
+    unsigned BitWidth : 7;
+
+    /// When ResultKind == RSK_APValue, true if the ASTContext will cleanup the
+    /// tail-allocated APValue.
+    unsigned HasCleanup : 1;
+
+    /// True if this ConstantExpr was created for immediate invocation.
+    unsigned IsImmediateInvocation : 1;
+  };
 
   class PredefinedExprBitfields {
     friend class ASTStmtReader;
@@ -342,19 +374,12 @@ protected:
     unsigned HasFoundDecl : 1;
     unsigned HadMultipleCandidates : 1;
     unsigned RefersToEnclosingVariableOrCapture : 1;
+    unsigned NonOdrUseReason : 2;
 
     /// The location of the declaration name itself.
     SourceLocation Loc;
   };
 
-  enum APFloatSemantics {
-    IEEEhalf,
-    IEEEsingle,
-    IEEEdouble,
-    x87DoubleExtended,
-    IEEEquad,
-    PPCDoubleDouble
-  };
 
   class FloatingLiteralBitfields {
     friend class FloatingLiteral;
@@ -402,6 +427,11 @@ protected:
 
     unsigned Opc : 5;
     unsigned CanOverflow : 1;
+    //
+    /// This is only meaningful for operations on floating point
+    /// types when additional values need to be in trailing storage.
+    /// It is 0 otherwise.
+    unsigned HasFPFeatures : 1;
 
     SourceLocation Loc;
   };
@@ -415,8 +445,9 @@ protected:
     unsigned IsType : 1; // true if operand is a type, false if an expression.
   };
 
-  class ArraySubscriptExprBitfields {
+  class ArrayOrMatrixSubscriptExprBitfields {
     friend class ArraySubscriptExpr;
+    friend class MatrixSubscriptExpr;
 
     unsigned : NumExprBits;
 
@@ -444,6 +475,7 @@ protected:
   enum { NumCallExprBits = 32 };
 
   class MemberExprBitfields {
+    friend class ASTStmtReader;
     friend class MemberExpr;
 
     unsigned : NumExprBits;
@@ -467,6 +499,11 @@ protected:
     /// True if this member expression refers to a method that
     /// was resolved from an overloaded set having size greater than 1.
     unsigned HadMultipleCandidates : 1;
+
+    /// Value of type NonOdrUseReason indicating why this MemberExpr does
+    /// not constitute an odr-use of the named declaration. Meaningful only
+    /// when naming a static member.
+    unsigned NonOdrUseReason : 2;
 
     /// This is the location of the -> or . in the expression.
     SourceLocation OperatorLoc;
@@ -494,8 +531,9 @@ protected:
     unsigned Opc : 6;
 
     /// This is only meaningful for operations on floating point
-    /// types and 0 otherwise.
-    unsigned FPFeatures : 3;
+    /// types when additional values need to be in trailing storage.
+    /// It is 0 otherwise.
+    unsigned HasFPFeatures : 1;
 
     SourceLocation OpLoc;
   };
@@ -542,6 +580,29 @@ protected:
     unsigned ResultIndex : 32 - 8 - NumExprBits;
   };
 
+  class SourceLocExprBitfields {
+    friend class ASTStmtReader;
+    friend class SourceLocExpr;
+
+    unsigned : NumExprBits;
+
+    /// The kind of source location builtin represented by the SourceLocExpr.
+    /// Ex. __builtin_LINE, __builtin_FUNCTION, ect.
+    unsigned Kind : 2;
+  };
+
+  class StmtExprBitfields {
+    friend class ASTStmtReader;
+    friend class StmtExpr;
+
+    unsigned : NumExprBits;
+
+    /// The number of levels of template parameters enclosing this statement
+    /// expression. Used to determine if a statement expression remains
+    /// dependent after instantiation.
+    unsigned TemplateDepth;
+  };
+
   //===--- C++ Expression bitfields classes ---===//
 
   class CXXOperatorCallExprBitfields {
@@ -553,9 +614,15 @@ protected:
     /// The kind of this overloaded operator. One of the enumerator
     /// value of OverloadedOperatorKind.
     unsigned OperatorKind : 6;
+  };
 
-    // Only meaningful for floating point types.
-    unsigned FPFeatures : 3;
+  class CXXRewrittenBinaryOperatorBitfields {
+    friend class ASTStmtReader;
+    friend class CXXRewrittenBinaryOperator;
+
+    unsigned : NumCallExprBits;
+
+    unsigned IsReversed : 1;
   };
 
   class CXXBoolLiteralExprBitfields {
@@ -705,8 +772,10 @@ protected:
     /// the trait evaluated true or false.
     unsigned Value : 1;
 
-    /// The number of arguments to this type trait.
-    unsigned NumArgs : 32 - 8 - 1 - NumExprBits;
+    /// The number of arguments to this type trait. According to [implimits]
+    /// 8 bits would be enough, but we require (and test for) at least 16 bits
+    /// to mirror FunctionType.
+    unsigned NumArgs;
   };
 
   class DependentScopeDeclRefExprBitfields {
@@ -855,6 +924,39 @@ protected:
     SourceLocation NameLoc;
   };
 
+  class LambdaExprBitfields {
+    friend class ASTStmtReader;
+    friend class ASTStmtWriter;
+    friend class LambdaExpr;
+
+    unsigned : NumExprBits;
+
+    /// The default capture kind, which is a value of type
+    /// LambdaCaptureDefault.
+    unsigned CaptureDefault : 2;
+
+    /// Whether this lambda had an explicit parameter list vs. an
+    /// implicit (and empty) parameter list.
+    unsigned ExplicitParams : 1;
+
+    /// Whether this lambda had the result type explicitly specified.
+    unsigned ExplicitResultType : 1;
+
+    /// The number of captures.
+    unsigned NumCaptures : 16;
+  };
+
+  class RequiresExprBitfields {
+    friend class ASTStmtReader;
+    friend class ASTStmtWriter;
+    friend class RequiresExpr;
+
+    unsigned : NumExprBits;
+
+    unsigned IsSatisfied : 1;
+    SourceLocation RequiresKWLoc;
+  };
+
   //===--- C++ Coroutines TS bitfields classes ---===//
 
   class CoawaitExprBitfields {
@@ -911,6 +1013,7 @@ protected:
 
     // Expressions
     ExprBitfields ExprBits;
+    ConstantExprBitfields ConstantExprBits;
     PredefinedExprBitfields PredefinedExprBits;
     DeclRefExprBitfields DeclRefExprBits;
     FloatingLiteralBitfields FloatingLiteralBits;
@@ -918,7 +1021,7 @@ protected:
     CharacterLiteralBitfields CharacterLiteralBits;
     UnaryOperatorBitfields UnaryOperatorBits;
     UnaryExprOrTypeTraitExprBitfields UnaryExprOrTypeTraitExprBits;
-    ArraySubscriptExprBitfields ArraySubscriptExprBits;
+    ArrayOrMatrixSubscriptExprBitfields ArrayOrMatrixSubscriptExprBits;
     CallExprBitfields CallExprBits;
     MemberExprBitfields MemberExprBits;
     CastExprBitfields CastExprBits;
@@ -927,9 +1030,14 @@ protected:
     ParenListExprBitfields ParenListExprBits;
     GenericSelectionExprBitfields GenericSelectionExprBits;
     PseudoObjectExprBitfields PseudoObjectExprBits;
+    SourceLocExprBitfields SourceLocExprBits;
+
+    // GNU Extensions.
+    StmtExprBitfields StmtExprBits;
 
     // C++ Expressions
     CXXOperatorCallExprBitfields CXXOperatorCallExprBits;
+    CXXRewrittenBinaryOperatorBitfields CXXRewrittenBinaryOperatorBits;
     CXXBoolLiteralExprBitfields CXXBoolLiteralExprBits;
     CXXNullPtrLiteralExprBitfields CXXNullPtrLiteralExprBits;
     CXXThisExprBitfields CXXThisExprBits;
@@ -950,6 +1058,8 @@ protected:
     UnresolvedMemberExprBitfields UnresolvedMemberExprBits;
     CXXNoexceptExprBitfields CXXNoexceptExprBits;
     SubstNonTypeTemplateParmExprBitfields SubstNonTypeTemplateParmExprBits;
+    LambdaExprBitfields LambdaExprBits;
+    RequiresExprBitfields RequiresExprBits;
 
     // C++ Coroutines TS expressions
     CoawaitExprBitfields CoawaitBits;
@@ -1000,7 +1110,7 @@ protected:
     CastIterator(StmtPtr *I) : Base(I) {}
 
     typename Base::value_type operator*() const {
-      return cast<T>(*this->I);
+      return cast_or_null<T>(*this->I);
     }
   };
 
@@ -1020,6 +1130,12 @@ protected:
   explicit Stmt(StmtClass SC, EmptyShell) : Stmt(SC) {}
 
 public:
+  Stmt() = delete;
+  Stmt(const Stmt &) = delete;
+  Stmt(Stmt &&) = delete;
+  Stmt &operator=(const Stmt &) = delete;
+  Stmt &operator=(Stmt &&) = delete;
+
   Stmt(StmtClass SC) {
     static_assert(sizeof(*this) <= 8,
                   "changing bitfields changed sizeof(Stmt)");
@@ -1050,9 +1166,7 @@ public:
   /// Dumps the specified AST fragment and all subtrees to
   /// \c llvm::errs().
   void dump() const;
-  void dump(SourceManager &SM) const;
-  void dump(raw_ostream &OS, SourceManager &SM) const;
-  void dump(raw_ostream &OS) const;
+  void dump(raw_ostream &OS, const ASTContext &Context) const;
 
   /// \return Unique reproducible object identifier
   int64_t getID(const ASTContext &Context) const;
@@ -1067,6 +1181,10 @@ public:
                    const PrintingPolicy &Policy, unsigned Indentation = 0,
                    StringRef NewlineSymbol = "\n",
                    const ASTContext *Context = nullptr) const;
+
+  /// Pretty-prints in JSON format.
+  void printJson(raw_ostream &Out, PrinterHelper *Helper,
+                 const PrintingPolicy &Policy, bool AddQuotes) const;
 
   /// viewAST - Visualize an AST rooted at this Stmt* using GraphViz.  Only
   ///   works on systems with GraphViz (Mac OS X) or dot+gv installed.
@@ -1174,6 +1292,11 @@ public:
                        child_iterator(DG.end(), DG.end()));
   }
 
+  const_child_range children() const {
+    auto Children = const_cast<DeclStmt *>(this)->children();
+    return const_child_range(Children);
+  }
+
   using decl_iterator = DeclGroupRef::iterator;
   using const_decl_iterator = DeclGroupRef::const_iterator;
   using decl_range = llvm::iterator_range<decl_iterator>;
@@ -1231,6 +1354,10 @@ public:
   child_range children() {
     return child_range(child_iterator(), child_iterator());
   }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
+  }
 };
 
 /// CompoundStmt - This represents a group of statements like { stmt stmt }.
@@ -1276,11 +1403,6 @@ public:
     return !body_empty() ? body_begin()[size() - 1] : nullptr;
   }
 
-  void setLastStmt(Stmt *S) {
-    assert(!body_empty() && "setLastStmt");
-    body_begin()[size() - 1] = S;
-  }
-
   using const_body_iterator = Stmt *const *;
   using body_const_range = llvm::iterator_range<const_body_iterator>;
 
@@ -1321,6 +1443,26 @@ public:
 
   const_reverse_body_iterator body_rend() const {
     return const_reverse_body_iterator(body_begin());
+  }
+
+  // Get the Stmt that StmtExpr would consider to be the result of this
+  // compound statement. This is used by StmtExpr to properly emulate the GCC
+  // compound expression extension, which ignores trailing NullStmts when
+  // getting the result of the expression.
+  // i.e. ({ 5;;; })
+  //           ^^ ignored
+  // If we don't find something that isn't a NullStmt, just return the last
+  // Stmt.
+  Stmt *getStmtExprResult() {
+    for (auto *B : llvm::reverse(body())) {
+      if (!isa<NullStmt>(B))
+        return B;
+    }
+    return body_back();
+  }
+
+  const Stmt *getStmtExprResult() const {
+    return const_cast<CompoundStmt *>(this)->getStmtExprResult();
   }
 
   SourceLocation getBeginLoc() const { return CompoundStmtBits.LBraceLoc; }
@@ -1535,6 +1677,12 @@ public:
                        getTrailingObjects<Stmt *>() +
                            numTrailingObjects(OverloadToken<Stmt *>()));
   }
+
+  const_child_range children() const {
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() +
+                                 numTrailingObjects(OverloadToken<Stmt *>()));
+  }
 };
 
 class DefaultStmt : public SwitchCase {
@@ -1566,6 +1714,10 @@ public:
 
   // Iterators
   child_range children() { return child_range(&SubStmt, &SubStmt + 1); }
+
+  const_child_range children() const {
+    return const_child_range(&SubStmt, &SubStmt + 1);
+  }
 };
 
 SourceLocation SwitchCase::getEndLoc() const {
@@ -1640,6 +1792,10 @@ public:
 
   child_range children() { return child_range(&SubStmt, &SubStmt + 1); }
 
+  const_child_range children() const {
+    return const_child_range(&SubStmt, &SubStmt + 1);
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == LabelStmtClass;
   }
@@ -1696,6 +1852,10 @@ public:
   SourceLocation getEndLoc() const LLVM_READONLY { return SubStmt->getEndLoc();}
 
   child_range children() { return child_range(&SubStmt, &SubStmt + 1); }
+
+  const_child_range children() const {
+    return const_child_range(&SubStmt, &SubStmt + 1);
+  }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == AttributedStmtClass;
@@ -1879,6 +2039,10 @@ public:
   bool isConstexpr() const { return IfStmtBits.IsConstexpr; }
   void setConstexpr(bool C) { IfStmtBits.IsConstexpr = C; }
 
+  /// If this is an 'if constexpr', determine which substatement will be taken.
+  /// Otherwise, or if the condition is value-dependent, returns None.
+  Optional<const Stmt*> getNondiscardedCase(const ASTContext &Ctx) const;
+
   bool isObjCAvailabilityCheck() const;
 
   SourceLocation getBeginLoc() const { return getIfLoc(); }
@@ -1894,6 +2058,12 @@ public:
     return child_range(getTrailingObjects<Stmt *>(),
                        getTrailingObjects<Stmt *>() +
                            numTrailingObjects(OverloadToken<Stmt *>()));
+  }
+
+  const_child_range children() const {
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() +
+                                 numTrailingObjects(OverloadToken<Stmt *>()));
   }
 
   static bool classof(const Stmt *T) {
@@ -2073,6 +2243,12 @@ public:
                            numTrailingObjects(OverloadToken<Stmt *>()));
   }
 
+  const_child_range children() const {
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() +
+                                 numTrailingObjects(OverloadToken<Stmt *>()));
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == SwitchStmtClass;
   }
@@ -2101,6 +2277,8 @@ class WhileStmt final : public Stmt,
   enum { VarOffset = 0, BodyOffsetFromCond = 1 };
   enum { NumMandatoryStmtPtr = 2 };
 
+  SourceLocation LParenLoc, RParenLoc;
+
   unsigned varOffset() const { return VarOffset; }
   unsigned condOffset() const { return VarOffset + hasVarStorage(); }
   unsigned bodyOffset() const { return condOffset() + BodyOffsetFromCond; }
@@ -2111,7 +2289,8 @@ class WhileStmt final : public Stmt,
 
   /// Build a while statement.
   WhileStmt(const ASTContext &Ctx, VarDecl *Var, Expr *Cond, Stmt *Body,
-            SourceLocation WL);
+            SourceLocation WL, SourceLocation LParenLoc,
+            SourceLocation RParenLoc);
 
   /// Build an empty while statement.
   explicit WhileStmt(EmptyShell Empty, bool HasVar);
@@ -2119,7 +2298,8 @@ class WhileStmt final : public Stmt,
 public:
   /// Create a while statement.
   static WhileStmt *Create(const ASTContext &Ctx, VarDecl *Var, Expr *Cond,
-                           Stmt *Body, SourceLocation WL);
+                           Stmt *Body, SourceLocation WL,
+                           SourceLocation LParenLoc, SourceLocation RParenLoc);
 
   /// Create an empty while statement optionally with storage for
   /// a condition variable.
@@ -2183,6 +2363,11 @@ public:
   SourceLocation getWhileLoc() const { return WhileStmtBits.WhileLoc; }
   void setWhileLoc(SourceLocation L) { WhileStmtBits.WhileLoc = L; }
 
+  SourceLocation getLParenLoc() const { return LParenLoc; }
+  void setLParenLoc(SourceLocation L) { LParenLoc = L; }
+  SourceLocation getRParenLoc() const { return RParenLoc; }
+  void setRParenLoc(SourceLocation L) { RParenLoc = L; }
+
   SourceLocation getBeginLoc() const { return getWhileLoc(); }
   SourceLocation getEndLoc() const LLVM_READONLY {
     return getBody()->getEndLoc();
@@ -2197,6 +2382,12 @@ public:
     return child_range(getTrailingObjects<Stmt *>(),
                        getTrailingObjects<Stmt *>() +
                            numTrailingObjects(OverloadToken<Stmt *>()));
+  }
+
+  const_child_range children() const {
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() +
+                                 numTrailingObjects(OverloadToken<Stmt *>()));
   }
 };
 
@@ -2247,6 +2438,10 @@ public:
   // Iterators
   child_range children() {
     return child_range(&SubExprs[0], &SubExprs[0] + END_EXPR);
+  }
+
+  const_child_range children() const {
+    return const_child_range(&SubExprs[0], &SubExprs[0] + END_EXPR);
   }
 };
 
@@ -2317,6 +2512,10 @@ public:
   child_range children() {
     return child_range(&SubExprs[0], &SubExprs[0]+END_EXPR);
   }
+
+  const_child_range children() const {
+    return const_child_range(&SubExprs[0], &SubExprs[0] + END_EXPR);
+  }
 };
 
 /// GotoStmt - This represents a direct goto.
@@ -2351,6 +2550,10 @@ public:
   // Iterators
   child_range children() {
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -2397,6 +2600,10 @@ public:
 
   // Iterators
   child_range children() { return child_range(&Target, &Target + 1); }
+
+  const_child_range children() const {
+    return const_child_range(&Target, &Target + 1);
+  }
 };
 
 /// ContinueStmt - This represents a continue.
@@ -2423,6 +2630,10 @@ public:
   child_range children() {
     return child_range(child_iterator(), child_iterator());
   }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
+  }
 };
 
 /// BreakStmt - This represents a break.
@@ -2448,6 +2659,10 @@ public:
   // Iterators
   child_range children() {
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -2532,6 +2747,12 @@ public:
     if (RetExpr)
       return child_range(&RetExpr, &RetExpr + 1);
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    if (RetExpr)
+      return const_child_range(&RetExpr, &RetExpr + 1);
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -2688,6 +2909,10 @@ public:
   child_range children() {
     return child_range(&Exprs[0], &Exprs[0] + NumOutputs + NumInputs);
   }
+
+  const_child_range children() const {
+    return const_child_range(&Exprs[0], &Exprs[0] + NumOutputs + NumInputs);
+  }
 };
 
 /// This represents a GCC inline-assembly statement extension.
@@ -2701,13 +2926,15 @@ class GCCAsmStmt : public AsmStmt {
   StringLiteral **Constraints = nullptr;
   StringLiteral **Clobbers = nullptr;
   IdentifierInfo **Names = nullptr;
+  unsigned NumLabels = 0;
 
 public:
   GCCAsmStmt(const ASTContext &C, SourceLocation asmloc, bool issimple,
              bool isvolatile, unsigned numoutputs, unsigned numinputs,
              IdentifierInfo **names, StringLiteral **constraints, Expr **exprs,
              StringLiteral *asmstr, unsigned numclobbers,
-             StringLiteral **clobbers, SourceLocation rparenloc);
+             StringLiteral **clobbers, unsigned numlabels,
+             SourceLocation rparenloc);
 
   /// Build an empty inline-assembly statement.
   explicit GCCAsmStmt(EmptyShell Empty) : AsmStmt(GCCAsmStmtClass, Empty) {}
@@ -2832,6 +3059,51 @@ public:
     return const_cast<GCCAsmStmt*>(this)->getInputExpr(i);
   }
 
+  //===--- Labels ---===//
+
+  bool isAsmGoto() const {
+    return NumLabels > 0;
+  }
+
+  unsigned getNumLabels() const {
+    return NumLabels;
+  }
+
+  IdentifierInfo *getLabelIdentifier(unsigned i) const {
+    return Names[i + NumOutputs + NumInputs];
+  }
+
+  AddrLabelExpr *getLabelExpr(unsigned i) const;
+  StringRef getLabelName(unsigned i) const;
+  using labels_iterator = CastIterator<AddrLabelExpr>;
+  using const_labels_iterator = ConstCastIterator<AddrLabelExpr>;
+  using labels_range = llvm::iterator_range<labels_iterator>;
+  using labels_const_range = llvm::iterator_range<const_labels_iterator>;
+
+  labels_iterator begin_labels() {
+    return &Exprs[0] + NumOutputs + NumInputs;
+  }
+
+  labels_iterator end_labels() {
+    return &Exprs[0] + NumOutputs + NumInputs + NumLabels;
+  }
+
+  labels_range labels() {
+    return labels_range(begin_labels(), end_labels());
+  }
+
+  const_labels_iterator begin_labels() const {
+    return &Exprs[0] + NumOutputs + NumInputs;
+  }
+
+  const_labels_iterator end_labels() const {
+    return &Exprs[0] + NumOutputs + NumInputs + NumLabels;
+  }
+
+  labels_const_range labels() const {
+    return labels_const_range(begin_labels(), end_labels());
+  }
+
 private:
   void setOutputsAndInputsAndClobbers(const ASTContext &C,
                                       IdentifierInfo **Names,
@@ -2839,6 +3111,7 @@ private:
                                       Stmt **Exprs,
                                       unsigned NumOutputs,
                                       unsigned NumInputs,
+                                      unsigned NumLabels,
                                       StringLiteral **Clobbers,
                                       unsigned NumClobbers);
 
@@ -2964,6 +3237,10 @@ public:
   child_range children() {
     return child_range(&Exprs[0], &Exprs[NumInputs + NumOutputs]);
   }
+
+  const_child_range children() const {
+    return const_child_range(&Exprs[0], &Exprs[NumInputs + NumOutputs]);
+  }
 };
 
 class SEHExceptStmt : public Stmt {
@@ -3001,6 +3278,10 @@ public:
     return child_range(Children, Children+2);
   }
 
+  const_child_range children() const {
+    return const_child_range(Children, Children + 2);
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == SEHExceptStmtClass;
   }
@@ -3030,6 +3311,10 @@ public:
 
   child_range children() {
     return child_range(&Block,&Block+1);
+  }
+
+  const_child_range children() const {
+    return const_child_range(&Block, &Block + 1);
   }
 
   static bool classof(const Stmt *T) {
@@ -3080,6 +3365,10 @@ public:
     return child_range(Children, Children+2);
   }
 
+  const_child_range children() const {
+    return const_child_range(Children, Children + 2);
+  }
+
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == SEHTryStmtClass;
   }
@@ -3109,6 +3398,10 @@ public:
   // Iterators
   child_range children() {
     return child_range(child_iterator(), child_iterator());
+  }
+
+  const_child_range children() const {
+    return const_child_range(const_child_iterator(), const_child_iterator());
   }
 };
 
@@ -3330,6 +3623,8 @@ public:
   }
 
   child_range children();
+
+  const_child_range children() const;
 };
 
 } // namespace clang

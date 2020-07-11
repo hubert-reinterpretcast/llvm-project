@@ -13,6 +13,8 @@
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Lex/MacroArgs.h"
+#include "clang/Lex/PPCallbacks.h"
+#include "clang/Lex/Preprocessor.h"
 
 namespace clang {
 namespace tidy {
@@ -77,10 +79,9 @@ private:
 } // namespace
 
 void AvoidUnderscoreInGoogletestNameCheck::registerPPCallbacks(
-    CompilerInstance &Compiler) {
-  Compiler.getPreprocessor().addPPCallbacks(
-      llvm::make_unique<AvoidUnderscoreInGoogletestNameCallback>(
-          &Compiler.getPreprocessor(), this));
+    const SourceManager &SM, Preprocessor *PP, Preprocessor *ModuleExpanderPP) {
+  PP->addPPCallbacks(
+      std::make_unique<AvoidUnderscoreInGoogletestNameCallback>(PP, this));
 }
 
 } // namespace readability

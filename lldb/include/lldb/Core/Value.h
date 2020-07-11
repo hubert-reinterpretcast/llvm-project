@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_Value_h_
-#define liblldb_Value_h_
+#ifndef LLDB_CORE_VALUE_H
+#define LLDB_CORE_VALUE_H
 
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Utility/DataBufferHeap.h"
@@ -26,20 +26,10 @@
 
 namespace lldb_private {
 class DataExtractor;
-}
-namespace lldb_private {
 class ExecutionContext;
-}
-namespace lldb_private {
 class Module;
-}
-namespace lldb_private {
 class Stream;
-}
-namespace lldb_private {
 class Type;
-}
-namespace lldb_private {
 class Variable;
 }
 
@@ -220,7 +210,6 @@ public:
   uint64_t GetValueByteSize(Status *error_ptr, ExecutionContext *exe_ctx);
 
   Status GetValueAsData(ExecutionContext *exe_ctx, DataExtractor &data,
-                        uint32_t data_offset,
                         Module *module); // Can be nullptr
 
   static const char *GetValueTypeAsCString(ValueType context_type);
@@ -269,4 +258,4 @@ private:
 
 } // namespace lldb_private
 
-#endif // liblldb_Value_h_
+#endif // LLDB_CORE_VALUE_H

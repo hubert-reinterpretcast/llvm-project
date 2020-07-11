@@ -32,14 +32,13 @@ class Stream;
 
 namespace lldb_private {
 
-//----------------------------------------------------------------------
 // A class designed to hold onto values and their corresponding types.
 // Operators are defined and Scalar objects will correctly promote their types
 // and values before performing these operations. Type promotion currently
 // follows the ANSI C type promotion rules.
-//----------------------------------------------------------------------
 class Scalar {
 public:
+  // FIXME: These are host types which seems to be an odd choice.
   enum Type {
     e_void = 0,
     e_sint,
@@ -59,69 +58,45 @@ public:
     e_long_double
   };
 
-  //------------------------------------------------------------------
   // Constructors and Destructors
-  //------------------------------------------------------------------
   Scalar();
-  Scalar(int v) : m_type(e_sint), m_float((float)0) {
+  Scalar(int v) : m_type(e_sint), m_float(static_cast<float>(0)) {
     m_integer = llvm::APInt(sizeof(int) * 8, v, true);
   }
-  Scalar(unsigned int v) : m_type(e_uint), m_float((float)0) {
+  Scalar(unsigned int v) : m_type(e_uint), m_float(static_cast<float>(0)) {
     m_integer = llvm::APInt(sizeof(int) * 8, v);
   }
-  Scalar(long v) : m_type(e_slong), m_float((float)0) {
+  Scalar(long v) : m_type(e_slong), m_float(static_cast<float>(0)) {
     m_integer = llvm::APInt(sizeof(long) * 8, v, true);
   }
-  Scalar(unsigned long v) : m_type(e_ulong), m_float((float)0) {
+  Scalar(unsigned long v) : m_type(e_ulong), m_float(static_cast<float>(0)) {
     m_integer = llvm::APInt(sizeof(long) * 8, v);
   }
-  Scalar(long long v) : m_type(e_slonglong), m_float((float)0) {
+  Scalar(long long v) : m_type(e_slonglong), m_float(static_cast<float>(0)) {
     m_integer = llvm::APInt(sizeof(long long) * 8, v, true);
   }
-  Scalar(unsigned long long v) : m_type(e_ulonglong), m_float((float)0) {
+  Scalar(unsigned long long v)
+      : m_type(e_ulonglong), m_float(static_cast<float>(0)) {
     m_integer = llvm::APInt(sizeof(long long) * 8, v);
   }
   Scalar(float v) : m_type(e_float), m_float(v) { m_float = llvm::APFloat(v); }
   Scalar(double v) : m_type(e_double), m_float(v) {
     m_float = llvm::APFloat(v);
   }
-  Scalar(long double v, bool ieee_quad)
-      : m_type(e_long_double), m_float((float)0), m_ieee_quad(ieee_quad) {
-    if (ieee_quad)
-      m_float = llvm::APFloat(llvm::APFloat::IEEEquad(),
-                              llvm::APInt(BITWIDTH_INT128, NUM_OF_WORDS_INT128,
-                                          ((type128 *)&v)->x));
-    else
-      m_float = llvm::APFloat(llvm::APFloat::x87DoubleExtended(),
-                              llvm::APInt(BITWIDTH_INT128, NUM_OF_WORDS_INT128,
-                                          ((type128 *)&v)->x));
-  }
-  Scalar(llvm::APInt v) : m_type(), m_float((float)0) {
+  Scalar(long double v)
+      : m_type(e_long_double),
+        m_float(llvm::APFloat::x87DoubleExtended(),
+                llvm::APInt(BITWIDTH_INT128, NUM_OF_WORDS_INT128,
+                            (reinterpret_cast<type128 *>(&v))->x)) {}
+  Scalar(llvm::APInt v) : m_type(), m_float(static_cast<float>(0)) {
     m_integer = llvm::APInt(v);
-    switch (m_integer.getBitWidth()) {
-    case 8:
-    case 16:
-    case 32:
-      m_type = e_sint;
-      return;
-    case 64:
-      m_type = e_slonglong;
-      return;
-    case 128:
-      m_type = e_sint128;
-      return;
-    case 256:
-      m_type = e_sint256;
-      return;
-    case 512:
-      m_type = e_sint512;
-      return;
-    }
-    lldbassert(false && "unsupported bitwidth");
+    m_type = GetBestTypeForBitSize(m_integer.getBitWidth(), true);
   }
-  Scalar(const Scalar &rhs);
   // Scalar(const RegisterValue& reg_value);
   virtual ~Scalar();
+
+  /// Return the most efficient Scalar::Type for the requested bit size.
+  static Type GetBestTypeForBitSize(size_t bit_size, bool sign);
 
   bool SignExtend(uint32_t bit_pos);
 
@@ -131,7 +106,10 @@ public:
 
   bool ClearBit(uint32_t bit);
 
-  const void *GetBytes() const;
+  /// Store the binary representation of this value into the given storage.
+  /// Exactly GetByteSize() bytes will be stored, and the buffer must be large
+  /// enough to hold this data.
+  void GetBytes(llvm::MutableArrayRef<uint8_t> storage) const;
 
   size_t GetByteSize() const;
 
@@ -147,13 +125,16 @@ public:
     m_integer.clearAllBits();
   }
 
-  const char *GetTypeAsCString() const;
+  const char *GetTypeAsCString() const { return GetValueTypeAsCString(m_type); }
 
   void GetValue(Stream *s, bool show_type) const;
 
   bool IsValid() const {
     return (m_type >= e_sint) && (m_type <= e_long_double);
   }
+
+  /// Convert to an integer with \p bits and the given signedness.
+  void TruncOrExtendTo(uint16_t bits, bool sign);
 
   bool Promote(Scalar::Type type);
 
@@ -171,68 +152,43 @@ public:
 
   static Scalar::Type GetValueTypeForFloatWithByteSize(size_t byte_size);
 
-  //----------------------------------------------------------------------
   // All operators can benefits from the implicit conversions that will happen
   // automagically by the compiler, so no temporary objects will need to be
   // created. As a result, we currently don't need a variety of overloaded set
   // value accessors.
-  //----------------------------------------------------------------------
-  Scalar &operator=(const int i);
-  Scalar &operator=(unsigned int v);
-  Scalar &operator=(long v);
-  Scalar &operator=(unsigned long v);
-  Scalar &operator=(long long v);
-  Scalar &operator=(unsigned long long v);
-  Scalar &operator=(float v);
-  Scalar &operator=(double v);
-  Scalar &operator=(long double v);
-  Scalar &operator=(llvm::APInt v);
-  Scalar &operator=(const Scalar &rhs); // Assignment operator
   Scalar &operator+=(const Scalar &rhs);
   Scalar &operator<<=(const Scalar &rhs); // Shift left
   Scalar &operator>>=(const Scalar &rhs); // Shift right (arithmetic)
   Scalar &operator&=(const Scalar &rhs);
 
-  //----------------------------------------------------------------------
   // Shifts the current value to the right without maintaining the current sign
   // of the value (if it is signed).
-  //----------------------------------------------------------------------
   bool ShiftRightLogical(const Scalar &rhs); // Returns true on success
 
-  //----------------------------------------------------------------------
   // Takes the absolute value of the current value if it is signed, else the
   // value remains unchanged. Returns false if the contained value has a void
   // type.
-  //----------------------------------------------------------------------
   bool AbsoluteValue(); // Returns true on success
-  //----------------------------------------------------------------------
   // Negates the current value (even for unsigned values). Returns false if the
   // contained value has a void type.
-  //----------------------------------------------------------------------
   bool UnaryNegate(); // Returns true on success
-  //----------------------------------------------------------------------
   // Inverts all bits in the current value as long as it isn't void or a
   // float/double/long double type. Returns false if the contained value has a
   // void/float/double/long double type, else the value is inverted and true is
   // returned.
-  //----------------------------------------------------------------------
   bool OnesComplement(); // Returns true on success
 
-  //----------------------------------------------------------------------
   // Access the type of the current value.
-  //----------------------------------------------------------------------
   Scalar::Type GetType() const { return m_type; }
 
-  //----------------------------------------------------------------------
   // Returns a casted value of the current contained data without modifying the
   // current value. FAIL_VALUE will be returned if the type of the value is
   // void or invalid.
-  //----------------------------------------------------------------------
   int SInt(int fail_value = 0) const;
 
   unsigned char UChar(unsigned char fail_value = 0) const;
 
-  signed char SChar(char fail_value = 0) const;
+  signed char SChar(signed char fail_value = 0) const;
 
   unsigned short UShort(unsigned short fail_value = 0) const;
 
@@ -248,7 +204,7 @@ public:
 
   unsigned long long ULongLong(unsigned long long fail_value = 0) const;
 
-  llvm::APInt SInt128(llvm::APInt &fail_value) const;
+  llvm::APInt SInt128(const llvm::APInt &fail_value) const;
 
   llvm::APInt UInt128(const llvm::APInt &fail_value) const;
 
@@ -271,7 +227,9 @@ public:
     if (total_byte_size == 8)
       return true;
 
-    const uint64_t max = ((uint64_t)1 << (uint64_t)(total_byte_size * 8)) - 1;
+    const uint64_t max = (static_cast<uint64_t>(1)
+                          << static_cast<uint64_t>(total_byte_size * 8)) -
+                         1;
     return uval64 <= max;
   }
 
@@ -282,7 +240,9 @@ public:
     if (total_byte_size == 8)
       return true;
 
-    const int64_t max = ((int64_t)1 << (uint64_t)(total_byte_size * 8 - 1)) - 1;
+    const int64_t max = (static_cast<int64_t>(1)
+                         << static_cast<uint64_t>(total_byte_size * 8 - 1)) -
+                        1;
     const int64_t min = ~(max);
     return min <= sval64 && sval64 <= max;
   }
@@ -302,13 +262,12 @@ protected:
   typedef double double_t;
   typedef long double long_double_t;
 
-  //------------------------------------------------------------------
   // Classes that inherit from Scalar can see and modify these
-  //------------------------------------------------------------------
   Scalar::Type m_type;
   llvm::APInt m_integer;
   llvm::APFloat m_float;
-  bool m_ieee_quad = false;
+
+  template <typename T> T GetAs(T fail_value) const;
 
 private:
   friend const Scalar operator+(const Scalar &lhs, const Scalar &rhs);
@@ -329,7 +288,6 @@ private:
   friend bool operator>=(const Scalar &lhs, const Scalar &rhs);
 };
 
-//----------------------------------------------------------------------
 // Split out the operators into a format where the compiler will be able to
 // implicitly convert numbers into Scalar objects.
 //
@@ -343,7 +301,6 @@ private:
 //  Item 19 of "Effective C++ Second Edition" by Scott Meyers
 //  Differentiate among members functions, non-member functions, and
 //  friend functions
-//----------------------------------------------------------------------
 const Scalar operator+(const Scalar &lhs, const Scalar &rhs);
 const Scalar operator-(const Scalar &lhs, const Scalar &rhs);
 const Scalar operator/(const Scalar &lhs, const Scalar &rhs);
@@ -360,6 +317,8 @@ bool operator<(const Scalar &lhs, const Scalar &rhs);
 bool operator<=(const Scalar &lhs, const Scalar &rhs);
 bool operator>(const Scalar &lhs, const Scalar &rhs);
 bool operator>=(const Scalar &lhs, const Scalar &rhs);
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &os, const Scalar &scalar);
 
 } // namespace lldb_private
 

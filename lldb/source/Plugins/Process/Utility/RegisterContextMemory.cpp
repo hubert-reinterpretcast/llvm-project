@@ -1,4 +1,4 @@
-//===-- RegisterContextMemory.cpp -------------------------------*- C++ -*-===//
+//===-- RegisterContextMemory.cpp -----------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -18,9 +18,7 @@
 using namespace lldb;
 using namespace lldb_private;
 
-//----------------------------------------------------------------------
 // RegisterContextMemory constructor
-//----------------------------------------------------------------------
 RegisterContextMemory::RegisterContextMemory(Thread &thread,
                                              uint32_t concrete_frame_idx,
                                              DynamicRegisterInfo &reg_infos,
@@ -40,9 +38,7 @@ RegisterContextMemory::RegisterContextMemory(Thread &thread,
   m_reg_data.SetData(reg_data_sp);
 }
 
-//----------------------------------------------------------------------
 // Destructor
-//----------------------------------------------------------------------
 RegisterContextMemory::~RegisterContextMemory() {}
 
 void RegisterContextMemory::InvalidateAllRegisters() {

@@ -9,7 +9,7 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_SIMD_INTRINSICS_CHECK_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_SIMD_INTRINSICS_CHECK_H
 
-#include "../ClangTidy.h"
+#include "../ClangTidyCheck.h"
 
 #include "llvm/ADT/SmallString.h"
 
@@ -25,6 +25,9 @@ class SIMDIntrinsicsCheck : public ClangTidyCheck {
 public:
   SIMDIntrinsicsCheck(StringRef Name, ClangTidyContext *Context);
 
+  bool isLanguageVersionSupported(const LangOptions &LangOpts) const override {
+    return LangOpts.CPlusPlus11;
+  }
   void storeOptions(ClangTidyOptions::OptionMap &Opts) override;
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;

@@ -1,4 +1,4 @@
-//===-- RegisterContextFreeBSD_mips64.cpp ----------------------*- C++ -*-===//
+//===-- RegisterContextFreeBSD_mips64.cpp ---------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -79,10 +79,8 @@ typedef struct _GPR {
   uint64_t dummy;
 } GPR_freebsd_mips;
 
-//---------------------------------------------------------------------------
 // Include RegisterInfos_mips64 to declare our g_register_infos_mips64
 // structure.
-//---------------------------------------------------------------------------
 #define DECLARE_REGISTER_INFOS_MIPS64_STRUCT
 #include "RegisterInfos_mips64.h"
 #undef DECLARE_REGISTER_INFOS_MIPS64_STRUCT

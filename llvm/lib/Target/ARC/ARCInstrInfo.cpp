@@ -27,6 +27,19 @@ using namespace llvm;
 #include "ARCGenInstrInfo.inc"
 
 #define DEBUG_TYPE "arc-inst-info"
+
+enum AddrIncType {
+    NoAddInc = 0,
+    PreInc   = 1,
+    PostInc  = 2,
+    Scaled   = 3
+};
+
+enum TSFlagsConstants {
+    TSF_AddrModeOff = 0,
+    TSF_AddModeMask = 3
+};
+
 // Pin the vtable to this file.
 void ARCInstrInfo::anchor() {}
 
@@ -148,7 +161,7 @@ static bool isJumpOpcode(int Opc) { return Opc == ARC::J; }
 ///    condition.  These operands can be passed to other TargetInstrInfo
 ///    methods to create new branches.
 ///
-/// Note that RemoveBranch and InsertBranch must be implemented to support
+/// Note that RemoveBranch and insertBranch must be implemented to support
 /// cases where this method returns success.
 ///
 /// If AllowModify is true, then this routine is allowed to modify the basic
@@ -267,8 +280,8 @@ unsigned ARCInstrInfo::removeBranch(MachineBasicBlock &MBB,
 
 void ARCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
                                MachineBasicBlock::iterator I,
-                               const DebugLoc &dl, unsigned DestReg,
-                               unsigned SrcReg, bool KillSrc) const {
+                               const DebugLoc &dl, MCRegister DestReg,
+                               MCRegister SrcReg, bool KillSrc) const {
   assert(ARC::GPR32RegClass.contains(SrcReg) &&
          "Only GPR32 src copy supported.");
   assert(ARC::GPR32RegClass.contains(DestReg) &&
@@ -279,18 +292,18 @@ void ARCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
 void ARCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                        MachineBasicBlock::iterator I,
-                                       unsigned SrcReg, bool isKill,
+                                       Register SrcReg, bool isKill,
                                        int FrameIndex,
                                        const TargetRegisterClass *RC,
                                        const TargetRegisterInfo *TRI) const {
   DebugLoc dl = MBB.findDebugLoc(I);
   MachineFunction &MF = *MBB.getParent();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  unsigned Align = MFI.getObjectAlignment(FrameIndex);
 
   MachineMemOperand *MMO = MF.getMachineMemOperand(
       MachinePointerInfo::getFixedStack(MF, FrameIndex),
-      MachineMemOperand::MOStore, MFI.getObjectSize(FrameIndex), Align);
+      MachineMemOperand::MOStore, MFI.getObjectSize(FrameIndex),
+      MFI.getObjectAlign(FrameIndex));
 
   assert(MMO && "Couldn't get MachineMemOperand for store to stack.");
   assert(TRI->getSpillSize(*RC) == 4 &&
@@ -308,16 +321,16 @@ void ARCInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
 void ARCInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                         MachineBasicBlock::iterator I,
-                                        unsigned DestReg, int FrameIndex,
+                                        Register DestReg, int FrameIndex,
                                         const TargetRegisterClass *RC,
                                         const TargetRegisterInfo *TRI) const {
   DebugLoc dl = MBB.findDebugLoc(I);
   MachineFunction &MF = *MBB.getParent();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  unsigned Align = MFI.getObjectAlignment(FrameIndex);
   MachineMemOperand *MMO = MF.getMachineMemOperand(
       MachinePointerInfo::getFixedStack(MF, FrameIndex),
-      MachineMemOperand::MOLoad, MFI.getObjectSize(FrameIndex), Align);
+      MachineMemOperand::MOLoad, MFI.getObjectSize(FrameIndex),
+      MFI.getObjectAlign(FrameIndex));
 
   assert(MMO && "Couldn't get MachineMemOperand for store to stack.");
   assert(TRI->getSpillSize(*RC) == 4 &&
@@ -362,7 +375,7 @@ unsigned ARCInstrInfo::insertBranch(MachineBasicBlock &MBB,
   assert(!BytesAdded && "Code size not handled.");
 
   // Shouldn't be a fall through.
-  assert(TBB && "InsertBranch must not be told to insert a fallthrough");
+  assert(TBB && "insertBranch must not be told to insert a fallthrough");
   assert((Cond.size() == 3 || Cond.size() == 0) &&
          "ARC branch conditions have two components!");
 
@@ -394,4 +407,36 @@ unsigned ARCInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     return getInlineAsmLength(AsmStr, *MF->getTarget().getMCAsmInfo());
   }
   return MI.getDesc().getSize();
+}
+
+bool ARCInstrInfo::isPostIncrement(const MachineInstr &MI) const {
+  const MCInstrDesc &MID = MI.getDesc();
+  const uint64_t F = MID.TSFlags;
+  return ((F >> TSF_AddrModeOff) & TSF_AddModeMask) == PostInc;
+}
+
+bool ARCInstrInfo::isPreIncrement(const MachineInstr &MI) const {
+  const MCInstrDesc &MID = MI.getDesc();
+  const uint64_t F = MID.TSFlags;
+  return ((F >> TSF_AddrModeOff) & TSF_AddModeMask) == PreInc;
+}
+
+bool ARCInstrInfo::getBaseAndOffsetPosition(const MachineInstr &MI,
+                                        unsigned &BasePos,
+                                        unsigned &OffsetPos) const {
+  if (!MI.mayLoad() && !MI.mayStore())
+    return false;
+
+  BasePos = 1;
+  OffsetPos = 2;
+
+  if (isPostIncrement(MI) || isPreIncrement(MI)) {
+    BasePos++;
+    OffsetPos++;
+  }
+
+  if (!MI.getOperand(BasePos).isReg() || !MI.getOperand(OffsetPos).isImm())
+    return false;
+
+  return true;
 }

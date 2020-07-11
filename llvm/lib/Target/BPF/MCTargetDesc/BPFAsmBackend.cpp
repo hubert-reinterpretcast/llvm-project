@@ -48,9 +48,6 @@ public:
     return false;
   }
 
-  void relaxInstruction(const MCInst &Inst, const MCSubtargetInfo &STI,
-                        MCInst &Res) const override {}
-
   bool writeNopData(raw_ostream &OS, uint64_t Count) const override;
 };
 
@@ -72,12 +69,12 @@ void BPFAsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
                                bool IsResolved,
                                const MCSubtargetInfo *STI) const {
   if (Fixup.getKind() == FK_SecRel_4 || Fixup.getKind() == FK_SecRel_8) {
-    if (Value) {
-      MCContext &Ctx = Asm.getContext();
-      Ctx.reportError(Fixup.getLoc(),
-                      "Unsupported relocation: try to compile with -O2 or above, "
-                      "or check your static variable usage");
-    }
+    // The Value is 0 for global variables, and the in-section offset
+    // for static variables. Write to the immediate field of the inst.
+    assert(Value <= UINT32_MAX);
+    support::endian::write<uint32_t>(&Data[Fixup.getOffset() + 4],
+                                     static_cast<uint32_t>(Value),
+                                     Endian);
   } else if (Fixup.getKind() == FK_Data_4) {
     support::endian::write<uint32_t>(&Data[Fixup.getOffset()], Value, Endian);
   } else if (Fixup.getKind() == FK_Data_8) {

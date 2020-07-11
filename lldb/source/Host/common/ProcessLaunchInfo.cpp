@@ -1,4 +1,4 @@
-//===-- ProcessLaunchInfo.cpp -----------------------------------*- C++ -*-===//
+//===-- ProcessLaunchInfo.cpp ---------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -26,9 +26,7 @@
 using namespace lldb;
 using namespace lldb_private;
 
-//----------------------------------------------------------------------------
 // ProcessLaunchInfo member functions
-//----------------------------------------------------------------------------
 
 ProcessLaunchInfo::ProcessLaunchInfo()
     : ProcessInfo(), m_working_dir(), m_plugin_name(), m_flags(0),
@@ -135,7 +133,7 @@ const char *ProcessLaunchInfo::GetProcessPluginName() const {
 }
 
 void ProcessLaunchInfo::SetProcessPluginName(llvm::StringRef plugin) {
-  m_plugin_name = plugin;
+  m_plugin_name = std::string(plugin);
 }
 
 const FileSpec &ProcessLaunchInfo::GetShell() const { return m_shell; }
@@ -190,8 +188,13 @@ bool ProcessLaunchInfo::NoOpMonitorCallback(lldb::pid_t pid, bool exited, int si
 
 bool ProcessLaunchInfo::MonitorProcess() const {
   if (m_monitor_callback && ProcessIDIsValid()) {
+    llvm::Expected<HostThread> maybe_thread =
     Host::StartMonitoringChildProcess(m_monitor_callback, GetProcessID(),
                                       m_monitor_signals);
+    if (!maybe_thread)
+      LLDB_LOG(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST),
+               "failed to launch host thread: {}",
+               llvm::toString(maybe_thread.takeError()));
     return true;
   }
   return false;
@@ -215,26 +218,26 @@ llvm::Error ProcessLaunchInfo::SetUpPtyRedirection() {
   // do for now.
   open_flags |= O_CLOEXEC;
 #endif
-  if (!m_pty->OpenFirstAvailableMaster(open_flags, nullptr, 0)) {
+  if (!m_pty->OpenFirstAvailablePrimary(open_flags, nullptr, 0)) {
     return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                   "PTY::OpenFirstAvailableMaster failed");
+                                   "PTY::OpenFirstAvailablePrimary failed");
   }
-  const FileSpec slave_file_spec(m_pty->GetSlaveName(nullptr, 0));
+  const FileSpec secondary_file_spec(m_pty->GetSecondaryName(nullptr, 0));
 
-  // Only use the slave tty if we don't have anything specified for
+  // Only use the secondary tty if we don't have anything specified for
   // input and don't have an action for stdin
   if (GetFileActionForFD(STDIN_FILENO) == nullptr)
-    AppendOpenFileAction(STDIN_FILENO, slave_file_spec, true, false);
+    AppendOpenFileAction(STDIN_FILENO, secondary_file_spec, true, false);
 
-  // Only use the slave tty if we don't have anything specified for
+  // Only use the secondary tty if we don't have anything specified for
   // output and don't have an action for stdout
   if (GetFileActionForFD(STDOUT_FILENO) == nullptr)
-    AppendOpenFileAction(STDOUT_FILENO, slave_file_spec, false, true);
+    AppendOpenFileAction(STDOUT_FILENO, secondary_file_spec, false, true);
 
-  // Only use the slave tty if we don't have anything specified for
+  // Only use the secondary tty if we don't have anything specified for
   // error and don't have an action for stderr
   if (GetFileActionForFD(STDERR_FILENO) == nullptr)
-    AppendOpenFileAction(STDERR_FILENO, slave_file_spec, false, true);
+    AppendOpenFileAction(STDERR_FILENO, secondary_file_spec, false, true);
   return llvm::Error::success();
 }
 

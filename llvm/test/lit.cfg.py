@@ -22,7 +22,7 @@ config.test_format = lit.formats.ShTest(not llvm_config.use_lit_shell)
 
 # suffixes: A list of file extensions to treat as test files. This is overriden
 # by individual lit.local.cfg files in the test subdirectories.
-config.suffixes = ['.ll', '.c', '.cxx', '.test', '.txt', '.s', '.mir']
+config.suffixes = ['.ll', '.c', '.test', '.txt', '.s', '.mir', '.yaml']
 
 # excludes: A list of directories to exclude from the testsuite. The 'Inputs'
 # subdirectories contain auxiliary inputs for various tests in their parent
@@ -124,6 +124,11 @@ if config.have_ocamlopt:
 
 opt_viewer_cmd = '%s %s/tools/opt-viewer/opt-viewer.py' % (sys.executable, config.llvm_src_root)
 
+llvm_locstats_tool = os.path.join(config.llvm_tools_dir, 'llvm-locstats')
+config.substitutions.append(
+    ('%llvm-locstats', "'%s' %s" % (config.python_executable, llvm_locstats_tool)))
+config.llvm_locstats_used = os.path.exists(llvm_locstats_tool)
+
 tools = [
     ToolSubst('%lli', FindTool('lli'), post='.', extra_args=lli_args),
     ToolSubst('%llc_dwarf', FindTool('llc'), extra_args=llc_args),
@@ -135,21 +140,23 @@ tools = [
     ToolSubst('%opt-viewer', opt_viewer_cmd),
     ToolSubst('%llvm-objcopy', FindTool('llvm-objcopy')),
     ToolSubst('%llvm-strip', FindTool('llvm-strip')),
+    ToolSubst('%llvm-install-name-tool', FindTool('llvm-install-name-tool')),
 ]
 
 # FIXME: Why do we have both `lli` and `%lli` that do slightly different things?
 tools.extend([
     'dsymutil', 'lli', 'lli-child-target', 'llvm-ar', 'llvm-as',
-    'llvm-bcanalyzer', 'llvm-config', 'llvm-cov', 'llvm-cxxdump', 'llvm-cvtres',
-    'llvm-diff', 'llvm-dis', 'llvm-dwarfdump', 'llvm-exegesis', 'llvm-extract',
-    'llvm-isel-fuzzer', 'llvm-opt-fuzzer', 'llvm-lib', 'llvm-link', 'llvm-lto',
-    'llvm-lto2', 'llvm-mc', 'llvm-mca', 'llvm-modextract', 'llvm-nm',
-    'llvm-objcopy', 'llvm-objdump', 'llvm-pdbutil', 'llvm-profdata',
-    'llvm-ranlib', 'llvm-readelf', 'llvm-readobj', 'llvm-rtdyld', 'llvm-size',
-    'llvm-split', 'llvm-strings', 'llvm-strip', 'llvm-tblgen', 'llvm-undname',
-    'llvm-c-test', 'llvm-cxxfilt', 'llvm-xray', 'yaml2obj', 'obj2yaml',
-    'yaml-bench', 'verify-uselistorder', 'bugpoint', 'llc', 'llvm-symbolizer',
-    'opt', 'sancov', 'sanstats'])
+    'llvm-addr2line', 'llvm-bcanalyzer', 'llvm-config', 'llvm-cov',
+    'llvm-cxxdump', 'llvm-cvtres', 'llvm-diff', 'llvm-dis', 'llvm-dwarfdump',
+    'llvm-exegesis', 'llvm-extract', 'llvm-isel-fuzzer', 'llvm-ifs',
+    'llvm-install-name-tool', 'llvm-jitlink', 'llvm-opt-fuzzer', 'llvm-lib',
+    'llvm-link', 'llvm-lto', 'llvm-lto2', 'llvm-mc', 'llvm-mca',
+    'llvm-modextract', 'llvm-nm', 'llvm-objcopy', 'llvm-objdump',
+    'llvm-pdbutil', 'llvm-profdata', 'llvm-ranlib', 'llvm-rc', 'llvm-readelf',
+    'llvm-readobj', 'llvm-rtdyld', 'llvm-size', 'llvm-split', 'llvm-strings',
+    'llvm-strip', 'llvm-tblgen', 'llvm-undname', 'llvm-c-test', 'llvm-cxxfilt',
+    'llvm-xray', 'yaml2obj', 'obj2yaml', 'yaml-bench', 'verify-uselistorder',
+    'bugpoint', 'llc', 'llvm-symbolizer', 'opt', 'sancov', 'sanstats'])
 
 # The following tools are optional
 tools.extend([
@@ -177,24 +184,43 @@ if (config.host_ldflags.find("-m32") < 0
     and any(config.llvm_host_triple.startswith(x) for x in known_arches)):
   config.available_features.add("llvm-64-bits")
 
-# Others/can-execute.txt
-if sys.platform not in ['win32']:
+config.available_features.add("host-byteorder-" + sys.byteorder + "-endian")
+
+if sys.platform in ['win32']:
+    # ExecutionEngine, no weak symbols in COFF.
+    config.available_features.add('uses_COFF')
+else:
+    # Others/can-execute.txt
     config.available_features.add('can-execute')
-    config.available_features.add('not_COFF')
 
 # Loadable module
-# FIXME: This should be supplied by Makefile or autoconf.
-if sys.platform in ['win32', 'cygwin']:
-    loadable_module = (config.enable_shared == 1)
-else:
-    loadable_module = True
+if config.has_plugins:
+    config.available_features.add('plugins')
 
-if loadable_module:
-    config.available_features.add('loadable_module')
+if config.build_examples:
+    config.available_features.add('examples')
+
+if config.linked_bye_extension:
+    config.substitutions.append(('%llvmcheckext', 'CHECK-EXT'))
+    config.substitutions.append(('%loadbye', ''))
+    config.substitutions.append(('%loadnewpmbye', ''))
+else:
+    config.substitutions.append(('%llvmcheckext', 'CHECK-NOEXT'))
+    config.substitutions.append(('%loadbye',
+                                 '-load={}/Bye{}'.format(config.llvm_shlib_dir,
+                                                         config.llvm_shlib_ext)))
+    config.substitutions.append(('%loadnewpmbye',
+                                 '-load-pass-plugin={}/Bye{}'
+                                 .format(config.llvm_shlib_dir,
+                                         config.llvm_shlib_ext)))
+
 
 # Static libraries are not built if BUILD_SHARED_LIBS is ON.
 if not config.build_shared_libs and not config.link_llvm_dylib:
     config.available_features.add('static-libs')
+
+if config.have_tf_aot:
+    config.available_features.add("have_tf_aot")
 
 def have_cxx_shared_library():
     readobj_exe = lit.util.which('llvm-readobj', config.llvm_tools_dir)
@@ -226,9 +252,8 @@ def have_cxx_shared_library():
 if have_cxx_shared_library():
     config.available_features.add('cxx-shared-library')
 
-# Direct object generation
-if not 'hexagon' in config.target_triple:
-    config.available_features.add('object-emission')
+if config.libcxx_used:
+    config.available_features.add('libcxx-used')
 
 # LLVM can be configured with an empty default triple
 # Some tests are "generic" and require a valid default triple
@@ -304,15 +329,18 @@ llvm_config.feature_config(
      ('--has-global-isel', {'ON': 'global-isel'})])
 
 if 'darwin' == sys.platform:
-    try:
-        sysctl_cmd = subprocess.Popen(['sysctl', 'hw.optional.fma'],
-                                      stdout=subprocess.PIPE)
-    except OSError:
-        print('Could not exec sysctl')
-    result = sysctl_cmd.stdout.read().decode('ascii')
-    if -1 != result.find('hw.optional.fma: 1'):
-        config.available_features.add('fma3')
-    sysctl_cmd.wait()
+    cmd = ['sysctl', 'hw.optional.fma']
+    sysctl_cmd = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+
+    # Non zero return, probably a permission issue
+    if sysctl_cmd.wait():
+        print(
+          "Warning: sysctl exists but calling \"{}\" failed, defaulting to no fma3.".format(
+          " ".join(cmd)))
+    else:
+        result = sysctl_cmd.stdout.read().decode('ascii')
+        if 'hw.optional.fma: 1' in result:
+            config.available_features.add('fma3')
 
 # .debug_frame is not emitted for targeting Windows x64.
 if not re.match(r'^x86_64.*-(windows-gnu|windows-msvc)', config.target_triple):

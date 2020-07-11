@@ -614,7 +614,9 @@ public:
   bool isConcrete() const override { return true; }
   std::string getAsString() const override { return "\"" + Value.str() + "\""; }
 
-  std::string getAsUnquotedString() const override { return Value; }
+  std::string getAsUnquotedString() const override {
+    return std::string(Value);
+  }
 
   Init *getBit(unsigned Bit) const override {
     llvm_unreachable("Illegal bit reference off string");
@@ -623,10 +625,11 @@ public:
 
 class CodeInit : public TypedInit {
   StringRef Value;
+  SMLoc Loc;
 
-  explicit CodeInit(StringRef V)
+  explicit CodeInit(StringRef V, const SMLoc &Loc)
       : TypedInit(IK_CodeInit, static_cast<RecTy *>(CodeRecTy::get())),
-        Value(V) {}
+        Value(V), Loc(Loc) {}
 
 public:
   CodeInit(const StringInit &) = delete;
@@ -636,9 +639,10 @@ public:
     return I->getKind() == IK_CodeInit;
   }
 
-  static CodeInit *get(StringRef);
+  static CodeInit *get(StringRef, const SMLoc &Loc);
 
   StringRef getValue() const { return Value; }
+  const SMLoc &getLoc() const { return Loc; }
 
   Init *convertInitializerTo(RecTy *Ty) const override;
 
@@ -647,7 +651,9 @@ public:
     return "[{" + Value.str() + "}]";
   }
 
-  std::string getAsUnquotedString() const override { return Value; }
+  std::string getAsUnquotedString() const override {
+    return std::string(Value);
+  }
 
   Init *getBit(unsigned Bit) const override {
     llvm_unreachable("Illegal bit reference off string");
@@ -749,7 +755,7 @@ public:
 ///
 class UnOpInit : public OpInit, public FoldingSetNode {
 public:
-  enum UnaryOp : uint8_t { CAST, HEAD, TAIL, SIZE, EMPTY };
+  enum UnaryOp : uint8_t { CAST, HEAD, TAIL, SIZE, EMPTY, GETOP };
 
 private:
   Init *LHS;
@@ -798,8 +804,9 @@ public:
 /// !op (X, Y) - Combine two inits.
 class BinOpInit : public OpInit, public FoldingSetNode {
 public:
-  enum BinaryOp : uint8_t { ADD, AND, OR, SHL, SRA, SRL, LISTCONCAT,
-                            STRCONCAT, CONCAT, EQ, NE, LE, LT, GE, GT };
+  enum BinaryOp : uint8_t { ADD, MUL, AND, OR, SHL, SRA, SRL, LISTCONCAT,
+                            LISTSPLAT, STRCONCAT, CONCAT, EQ, NE, LE, LT, GE,
+                            GT, SETOP };
 
 private:
   Init *LHS, *RHS;
@@ -818,6 +825,8 @@ public:
   static BinOpInit *get(BinaryOp opc, Init *lhs, Init *rhs,
                         RecTy *Type);
   static Init *getStrConcat(Init *lhs, Init *rhs);
+  static Init *getListConcat(TypedInit *lhs, Init *rhs);
+  static Init *getListSplat(TypedInit *lhs, Init *rhs);
 
   void Profile(FoldingSetNodeID &ID) const;
 
@@ -1093,7 +1102,7 @@ public:
 
   Init *getBit(unsigned Bit) const override;
 
-  std::string getAsString() const override { return getName(); }
+  std::string getAsString() const override { return std::string(getName()); }
 };
 
 /// Opcode{0} - Represent access to one bit of a variable or field.
@@ -1258,7 +1267,14 @@ class FieldInit : public TypedInit {
 
   FieldInit(Init *R, StringInit *FN)
       : TypedInit(IK_FieldInit, R->getFieldType(FN)), Rec(R), FieldName(FN) {
-    assert(getType() && "FieldInit with non-record type!");
+#ifndef NDEBUG
+    if (!getType()) {
+      llvm::errs() << "In Record = " << Rec->getAsString()
+                   << ", got FieldName = " << *FieldName
+                   << " with non-record type!\n";
+      llvm_unreachable("FieldInit with non-record type!");
+    }
+#endif
   }
 
 public:
@@ -1279,6 +1295,7 @@ public:
   Init *resolveReferences(Resolver &R) const override;
   Init *Fold(Record *CurRec) const;
 
+  bool isConcrete() const override;
   std::string getAsString() const override {
     return Rec->getAsString() + "." + FieldName->getValue().str();
   }
@@ -1318,6 +1335,7 @@ public:
   void Profile(FoldingSetNodeID &ID) const;
 
   Init *getOperator() const { return Val; }
+  Record *getOperatorAsDef(ArrayRef<SMLoc> Loc) const;
 
   StringInit *getName() const { return ValName; }
 
@@ -1586,11 +1604,6 @@ public:
   /// recursion / infinite loops.
   void resolveReferences(Resolver &R, const RecordVal *SkipVal = nullptr);
 
-  /// If anything in this record refers to RV, replace the
-  /// reference to RV with the RHS of RV.  If RV is null, we resolve all
-  /// possible references.
-  void resolveReferencesTo(const RecordVal *RV);
-
   RecordKeeper &getRecords() const {
     return TrackedRecords;
   }
@@ -1650,6 +1663,12 @@ public:
   /// the value is not the right type.
   Record *getValueAsDef(StringRef FieldName) const;
 
+  /// This method looks up the specified field and returns its value as a
+  /// Record, returning null if the field exists but is "uninitialized"
+  /// (i.e. set to `?`), and throwing an exception if the field does not
+  /// exist or if its value is not the right type.
+  Record *getValueAsOptionalDef(StringRef FieldName) const;
+
   /// This method looks up the specified field and returns its
   /// value as a bit, throwing an exception if the field does not exist or if
   /// the value is not the right type.
@@ -1675,10 +1694,10 @@ raw_ostream &operator<<(raw_ostream &OS, const Record &R);
 
 class RecordKeeper {
   friend class RecordRecTy;
-  using RecordMap = std::map<std::string, std::unique_ptr<Record>>;
+  using RecordMap = std::map<std::string, std::unique_ptr<Record>, std::less<>>;
   RecordMap Classes, Defs;
   FoldingSet<RecordRecTy> RecordTypePool;
-  std::map<std::string, Init *> ExtraGlobals;
+  std::map<std::string, Init *, std::less<>> ExtraGlobals;
   unsigned AnonCounter = 0;
 
 public:
@@ -1703,21 +1722,21 @@ public:
   }
 
   void addClass(std::unique_ptr<Record> R) {
-    bool Ins = Classes.insert(std::make_pair(R->getName(),
+    bool Ins = Classes.insert(std::make_pair(std::string(R->getName()),
                                              std::move(R))).second;
     (void)Ins;
     assert(Ins && "Class already exists");
   }
 
   void addDef(std::unique_ptr<Record> R) {
-    bool Ins = Defs.insert(std::make_pair(R->getName(),
+    bool Ins = Defs.insert(std::make_pair(std::string(R->getName()),
                                           std::move(R))).second;
     (void)Ins;
     assert(Ins && "Record already exists");
   }
 
   void addExtraGlobal(StringRef Name, Init *I) {
-    bool Ins = ExtraGlobals.insert(std::make_pair(Name, I)).second;
+    bool Ins = ExtraGlobals.insert(std::make_pair(std::string(Name), I)).second;
     (void)Ins;
     assert(!getDef(Name));
     assert(Ins && "Global already exists");

@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_GDBRemoteCommunicationServerPlatform_h_
-#define liblldb_GDBRemoteCommunicationServerPlatform_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATIONSERVERPLATFORM_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATIONSERVERPLATFORM_H
 
 #include <map>
 #include <mutex>
@@ -35,7 +35,6 @@ public:
   // a port chosen by the OS.
   void SetPortMap(PortMap &&port_map);
 
-  //----------------------------------------------------------------------
   // If we are using a port map where we can only use certain ports,
   // get the next available port.
   //
@@ -43,7 +42,6 @@ public:
   //
   // If we aren't using a port map, return 0 to indicate we should bind to
   // port 0 and then figure out which port we used.
-  //----------------------------------------------------------------------
   uint16_t GetNextAvailablePort();
 
   bool AssociatePortWithProcess(uint16_t port, lldb::pid_t pid);
@@ -102,10 +100,13 @@ private:
 
   static FileSpec GetDomainSocketPath(const char *prefix);
 
-  DISALLOW_COPY_AND_ASSIGN(GDBRemoteCommunicationServerPlatform);
+  GDBRemoteCommunicationServerPlatform(
+      const GDBRemoteCommunicationServerPlatform &) = delete;
+  const GDBRemoteCommunicationServerPlatform &
+  operator=(const GDBRemoteCommunicationServerPlatform &) = delete;
 };
 
 } // namespace process_gdb_remote
 } // namespace lldb_private
 
-#endif // liblldb_GDBRemoteCommunicationServerPlatform_h_
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATIONSERVERPLATFORM_H

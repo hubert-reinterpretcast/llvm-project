@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef __DNBArchImplI386_h__
-#define __DNBArchImplI386_h__
+#ifndef LLDB_TOOLS_DEBUGSERVER_SOURCE_MACOSX_I386_DNBARCHIMPLI386_H
+#define LLDB_TOOLS_DEBUGSERVER_SOURCE_MACOSX_I386_DNBARCHIMPLI386_H
 
 #if defined(__i386__) || defined(__x86_64__)
 
@@ -51,7 +51,12 @@ public:
   virtual bool ThreadDidStop();
   virtual bool NotifyException(MachException::Data &exc);
 
+  virtual uint32_t NumSupportedHardwareBreakpoints();
   virtual uint32_t NumSupportedHardwareWatchpoints();
+  virtual uint32_t EnableHardwareBreakpoint(nub_addr_t addr, nub_size_t size,
+                                            bool also_set_on_task);
+  virtual bool DisableHardwareBreakpoint(uint32_t hw_index,
+                                         bool also_set_on_task);
   virtual uint32_t EnableHardwareWatchpoint(nub_addr_t addr, nub_size_t size,
                                             bool read, bool write,
                                             bool also_set_on_task);
@@ -88,23 +93,23 @@ protected:
   static const size_t k_num_fpu_registers_avx512f;
   static const size_t k_num_all_registers_avx512f;
 
-  typedef enum RegisterSetTag {
+  enum RegisterSet {
     e_regSetALL = REGISTER_SET_ALL,
     e_regSetGPR,
     e_regSetFPU,
     e_regSetEXC,
     e_regSetDBG,
     kNumRegisterSets
-  } RegisterSet;
+  };
 
-  typedef enum RegisterSetWordSizeTag {
+  enum RegisterSetWordSize {
     e_regSetWordSizeGPR = sizeof(GPR) / sizeof(int),
     e_regSetWordSizeFPU = sizeof(FPU) / sizeof(int),
     e_regSetWordSizeEXC = sizeof(EXC) / sizeof(int),
     e_regSetWordSizeAVX = sizeof(AVX) / sizeof(int),
     e_regSetWordSizeAVX512f = sizeof(AVX512F) / sizeof(int),
     e_regSetWordSizeDBG = sizeof(DBG) / sizeof(int)
-  } RegisterSetWordSize;
+  };
 
   enum { Read = 0, Write = 1, kNumErrors = 2 };
 
@@ -210,6 +215,9 @@ protected:
 
   static uint32_t GetRegisterContextSize();
 
+  static void SetHardwareBreakpoint(DBG &debug_state, uint32_t hw_index,
+                                    nub_addr_t addr, nub_size_t size);
+
   // Helper functions for watchpoint manipulations.
   static void SetWatchpoint(DBG &debug_state, uint32_t hw_index,
                             nub_addr_t addr, nub_size_t size, bool read,
@@ -235,4 +243,4 @@ protected:
 };
 
 #endif // #if defined (__i386__) || defined (__x86_64__)
-#endif // #ifndef __DNBArchImplI386_h__
+#endif // LLDB_TOOLS_DEBUGSERVER_SOURCE_MACOSX_I386_DNBARCHIMPLI386_H

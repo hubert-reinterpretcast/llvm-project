@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_PlatformMacOSX_h_
-#define liblldb_PlatformMacOSX_h_
+#ifndef LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMMACOSX_H
+#define LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMMACOSX_H
 
 #include "PlatformDarwin.h"
 
@@ -17,9 +17,7 @@ public:
 
   ~PlatformMacOSX() override;
 
-  //------------------------------------------------------------
   // Class functions
-  //------------------------------------------------------------
   static lldb::PlatformSP CreateInstance(bool force,
                                          const lldb_private::ArchSpec *arch);
 
@@ -31,9 +29,7 @@ public:
 
   static const char *GetDescriptionStatic(bool is_host);
 
-  //------------------------------------------------------------
   // lldb_private::PluginInterface functions
-  //------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override {
     return GetPluginNameStatic(IsHost());
   }
@@ -77,11 +73,12 @@ public:
   AddClangModuleCompilationOptions(lldb_private::Target *target,
                                    std::vector<std::string> &options) override {
     return PlatformDarwin::AddClangModuleCompilationOptionsForSDKType(
-        target, options, PlatformDarwin::SDKType::MacOSX);
+        target, options, lldb_private::XcodeSDK::Type::MacOSX);
   }
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(PlatformMacOSX);
+  PlatformMacOSX(const PlatformMacOSX &) = delete;
+  const PlatformMacOSX &operator=(const PlatformMacOSX &) = delete;
 };
 
-#endif // liblldb_PlatformMacOSX_h_
+#endif // LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMMACOSX_H

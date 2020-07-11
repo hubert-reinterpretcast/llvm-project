@@ -1,4 +1,4 @@
-//===-- Event.cpp -----------------------------------------------*- C++ -*-===//
+//===-- Event.cpp ---------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -25,9 +25,7 @@ using namespace lldb_private;
 #pragma mark -
 #pragma mark Event
 
-//------------------------------------------------------------------
 // Event functions
-//------------------------------------------------------------------
 
 Event::Event(Broadcaster *broadcaster, uint32_t event_type, EventData *data)
     : m_broadcaster_wp(broadcaster->GetBroadcasterImpl()), m_type(event_type),
@@ -87,9 +85,7 @@ void Event::DoOnRemoval() {
 #pragma mark -
 #pragma mark EventData
 
-//------------------------------------------------------------------
 // EventData functions
-//------------------------------------------------------------------
 
 EventData::EventData() = default;
 
@@ -100,9 +96,7 @@ void EventData::Dump(Stream *s) const { s->PutCString("Generic Event Data"); }
 #pragma mark -
 #pragma mark EventDataBytes
 
-//------------------------------------------------------------------
 // EventDataBytes functions
-//------------------------------------------------------------------
 
 EventDataBytes::EventDataBytes() : m_bytes() {}
 
@@ -120,18 +114,18 @@ EventDataBytes::EventDataBytes(const void *src, size_t src_len) : m_bytes() {
 
 EventDataBytes::~EventDataBytes() = default;
 
-const ConstString &EventDataBytes::GetFlavorString() {
+ConstString EventDataBytes::GetFlavorString() {
   static ConstString g_flavor("EventDataBytes");
   return g_flavor;
 }
 
-const ConstString &EventDataBytes::GetFlavor() const {
+ConstString EventDataBytes::GetFlavor() const {
   return EventDataBytes::GetFlavorString();
 }
 
 void EventDataBytes::Dump(Stream *s) const {
   size_t num_printable_chars =
-      std::count_if(m_bytes.begin(), m_bytes.end(), isprint);
+      std::count_if(m_bytes.begin(), m_bytes.end(), llvm::isPrint);
   if (num_printable_chars == m_bytes.size())
     s->Format("\"{0}\"", m_bytes);
   else
@@ -149,7 +143,7 @@ size_t EventDataBytes::GetByteSize() const { return m_bytes.size(); }
 
 void EventDataBytes::SetBytes(const void *src, size_t src_len) {
   if (src != nullptr && src_len > 0)
-    m_bytes.assign((const char *)src, src_len);
+    m_bytes.assign(static_cast<const char *>(src), src_len);
   else
     m_bytes.clear();
 }
@@ -193,9 +187,7 @@ void EventDataBytes::SwapBytes(std::string &new_bytes) {
 #pragma mark -
 #pragma mark EventStructuredData
 
-//------------------------------------------------------------------
 // EventDataStructuredData definitions
-//------------------------------------------------------------------
 
 EventDataStructuredData::EventDataStructuredData()
     : EventData(), m_process_sp(), m_object_sp(), m_plugin_sp() {}
@@ -208,11 +200,9 @@ EventDataStructuredData::EventDataStructuredData(
 
 EventDataStructuredData::~EventDataStructuredData() {}
 
-//------------------------------------------------------------------
 // EventDataStructuredData member functions
-//------------------------------------------------------------------
 
-const ConstString &EventDataStructuredData::GetFlavor() const {
+ConstString EventDataStructuredData::GetFlavor() const {
   return EventDataStructuredData::GetFlavorString();
 }
 
@@ -251,9 +241,7 @@ void EventDataStructuredData::SetStructuredDataPlugin(
   m_plugin_sp = plugin_sp;
 }
 
-//------------------------------------------------------------------
 // EventDataStructuredData static functions
-//------------------------------------------------------------------
 
 const EventDataStructuredData *
 EventDataStructuredData::GetEventDataFromEvent(const Event *event_ptr) {
@@ -294,7 +282,7 @@ EventDataStructuredData::GetPluginFromEvent(const Event *event_ptr) {
     return StructuredDataPluginSP();
 }
 
-const ConstString &EventDataStructuredData::GetFlavorString() {
+ConstString EventDataStructuredData::GetFlavorString() {
   static ConstString s_flavor("EventDataStructuredData");
   return s_flavor;
 }

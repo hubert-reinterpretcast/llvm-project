@@ -34,6 +34,14 @@ using namespace llvm;
 
 #define DEBUG_TYPE "wasm-cfg-sort"
 
+// Option to disable EH pad first sorting. Only for testing unwind destination
+// mismatches in CFGStackify.
+static cl::opt<bool> WasmDisableEHPadSort(
+    "wasm-disable-ehpad-sort", cl::ReallyHidden,
+    cl::desc(
+        "WebAssembly: Disable EH pad-first sort order. Testing purpose only."),
+    cl::init(false));
+
 namespace {
 
 // Wrapper for loops and exceptions
@@ -71,7 +79,6 @@ template <> bool ConcreteRegion<MachineLoop>::isLoop() const { return true; }
 class RegionInfo {
   const MachineLoopInfo &MLI;
   const WebAssemblyExceptionInfo &WEI;
-  std::vector<const Region *> Regions;
   DenseMap<const MachineLoop *, std::unique_ptr<Region>> LoopMap;
   DenseMap<const WebAssemblyException *, std::unique_ptr<Region>> ExceptionMap;
 
@@ -85,18 +92,25 @@ public:
     const auto *WE = WEI.getExceptionFor(MBB);
     if (!ML && !WE)
       return nullptr;
-    if ((ML && !WE) || (ML && WE && ML->getNumBlocks() < WE->getNumBlocks())) {
+    // We determine subregion relationship by domination of their headers, i.e.,
+    // if region A's header dominates region B's header, B is a subregion of A.
+    // WebAssemblyException contains BBs in all its subregions (loops or
+    // exceptions), but MachineLoop may not, because MachineLoop does not contain
+    // BBs that don't have a path to its header even if they are dominated by
+    // its header. So here we should use WE->contains(ML->getHeader()), but not
+    // ML->contains(WE->getHeader()).
+    if ((ML && !WE) || (ML && WE && WE->contains(ML->getHeader()))) {
       // If the smallest region containing MBB is a loop
       if (LoopMap.count(ML))
         return LoopMap[ML].get();
-      LoopMap[ML] = llvm::make_unique<ConcreteRegion<MachineLoop>>(ML);
+      LoopMap[ML] = std::make_unique<ConcreteRegion<MachineLoop>>(ML);
       return LoopMap[ML].get();
     } else {
       // If the smallest region containing MBB is an exception
       if (ExceptionMap.count(WE))
         return ExceptionMap[WE].get();
       ExceptionMap[WE] =
-          llvm::make_unique<ConcreteRegion<WebAssemblyException>>(WE);
+          std::make_unique<ConcreteRegion<WebAssemblyException>>(WE);
       return ExceptionMap[WE].get();
     }
   }
@@ -144,9 +158,17 @@ static void maybeUpdateTerminator(MachineBasicBlock *MBB) {
     AllAnalyzable &= Term.isBranch() && !Term.isIndirectBranch();
   }
   assert((AnyBarrier || AllAnalyzable) &&
-         "AnalyzeBranch needs to analyze any block with a fallthrough");
+         "analyzeBranch needs to analyze any block with a fallthrough");
+
+  // Find the layout successor from the original block order.
+  MachineFunction *MF = MBB->getParent();
+  MachineBasicBlock *OriginalSuccessor =
+      unsigned(MBB->getNumber() + 1) < MF->getNumBlockIDs()
+          ? MF->getBlockNumbered(MBB->getNumber() + 1)
+          : nullptr;
+
   if (AllAnalyzable)
-    MBB->updateTerminator();
+    MBB->updateTerminator(OriginalSuccessor);
 }
 
 namespace {
@@ -187,10 +209,12 @@ namespace {
 struct CompareBlockNumbers {
   bool operator()(const MachineBasicBlock *A,
                   const MachineBasicBlock *B) const {
-    if (A->isEHPad() && !B->isEHPad())
-      return false;
-    if (!A->isEHPad() && B->isEHPad())
-      return true;
+    if (!WasmDisableEHPadSort) {
+      if (A->isEHPad() && !B->isEHPad())
+        return false;
+      if (!A->isEHPad() && B->isEHPad())
+        return true;
+    }
 
     return A->getNumber() > B->getNumber();
   }
@@ -199,11 +223,12 @@ struct CompareBlockNumbers {
 struct CompareBlockNumbersBackwards {
   bool operator()(const MachineBasicBlock *A,
                   const MachineBasicBlock *B) const {
-    // We give a higher priority to an EH pad
-    if (A->isEHPad() && !B->isEHPad())
-      return false;
-    if (!A->isEHPad() && B->isEHPad())
-      return true;
+    if (!WasmDisableEHPadSort) {
+      if (A->isEHPad() && !B->isEHPad())
+        return false;
+      if (!A->isEHPad() && B->isEHPad())
+        return true;
+    }
 
     return A->getNumber() < B->getNumber();
   }
@@ -230,9 +255,12 @@ struct Entry {
 static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
                        const WebAssemblyExceptionInfo &WEI,
                        const MachineDominatorTree &MDT) {
+  // Remember original layout ordering, so we can update terminators after
+  // reordering to point to the original layout successor.
+  MF.RenumberBlocks();
+
   // Prepare for a topological sort: Record the number of predecessors each
   // block has, ignoring loop backedges.
-  MF.RenumberBlocks();
   SmallVector<unsigned, 16> NumPredsLeft(MF.getNumBlockIDs(), 0);
   for (MachineBasicBlock &MBB : MF) {
     unsigned N = MBB.pred_size();
@@ -259,10 +287,10 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
                 CompareBlockNumbersBackwards>
       Ready;
 
-  RegionInfo SUI(MLI, WEI);
+  RegionInfo RI(MLI, WEI);
   SmallVector<Entry, 4> Entries;
   for (MachineBasicBlock *MBB = &MF.front();;) {
-    const Region *R = SUI.getRegionFor(MBB);
+    const Region *R = RI.getRegionFor(MBB);
     if (R) {
       // If MBB is a region header, add it to the active region list. We can't
       // put any blocks that it doesn't dominate until we see the end of the
@@ -306,6 +334,7 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
       // If Next was originally ordered before MBB, and it isn't because it was
       // loop-rotated above the header, it's not preferred.
       if (Next->getNumber() < MBB->getNumber() &&
+          (WasmDisableEHPadSort || !Next->isEHPad()) &&
           (!R || !R->contains(Next) ||
            R->getHeader()->getNumber() < Next->getNumber())) {
         Ready.push(Next);
@@ -353,9 +382,10 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
 
   for (auto &MBB : MF) {
     assert(MBB.getNumber() >= 0 && "Renumbered blocks should be non-negative.");
-    const Region *Region = SUI.getRegionFor(&MBB);
+    const Region *Region = RI.getRegionFor(&MBB);
 
     if (Region && &MBB == Region->getHeader()) {
+      // Region header.
       if (Region->isLoop()) {
         // Loop header. The loop predecessor should be sorted above, and the
         // other predecessors should be backedges below.
@@ -365,7 +395,7 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
               "Loop header predecessors must be loop predecessors or "
               "backedges");
       } else {
-        // Not a loop header. All predecessors should be sorted above.
+        // Exception header. All predecessors should be sorted above.
         for (auto Pred : MBB.predecessors())
           assert(Pred->getNumber() < MBB.getNumber() &&
                  "Non-loop-header predecessors should be topologically sorted");
@@ -374,11 +404,11 @@ static void sortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
              "Regions should be declared at most once.");
 
     } else {
-      // Not a loop header. All predecessors should be sorted above.
+      // Not a region header. All predecessors should be sorted above.
       for (auto Pred : MBB.predecessors())
         assert(Pred->getNumber() < MBB.getNumber() &&
                "Non-loop-header predecessors should be topologically sorted");
-      assert(OnStack.count(SUI.getRegionFor(&MBB)) &&
+      assert(OnStack.count(RI.getRegionFor(&MBB)) &&
              "Blocks must be nested in their regions");
     }
     while (OnStack.size() > 1 && &MBB == WebAssembly::getBottom(OnStack.back()))

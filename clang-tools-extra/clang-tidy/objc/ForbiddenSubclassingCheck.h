@@ -9,7 +9,7 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_OBJC_FORBIDDEN_SUBCLASSING_CHECK_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_OBJC_FORBIDDEN_SUBCLASSING_CHECK_H
 
-#include "../ClangTidy.h"
+#include "../ClangTidyCheck.h"
 #include "llvm/ADT/StringRef.h"
 #include <string>
 #include <vector>
@@ -26,6 +26,9 @@ namespace objc {
 class ForbiddenSubclassingCheck : public ClangTidyCheck {
 public:
   ForbiddenSubclassingCheck(StringRef Name, ClangTidyContext *Context);
+  bool isLanguageVersionSupported(const LangOptions &LangOpts) const override {
+    return LangOpts.ObjC;
+  }
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
   void storeOptions(ClangTidyOptions::OptionMap &Options) override;

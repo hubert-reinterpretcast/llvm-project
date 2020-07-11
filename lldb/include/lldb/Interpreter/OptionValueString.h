@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueString_h_
-#define liblldb_OptionValueString_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUESTRING_H
+#define LLDB_INTERPRETER_OPTIONVALUESTRING_H
 
 #include <string>
 
@@ -71,9 +71,7 @@ public:
 
   ~OptionValueString() override = default;
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeString; }
 
@@ -95,9 +93,7 @@ public:
 
   lldb::OptionValueSP DeepCopy() const override;
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   Flags &GetOptions() { return m_options; }
 
@@ -140,4 +136,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueString_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUESTRING_H

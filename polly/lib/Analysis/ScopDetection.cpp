@@ -50,22 +50,16 @@
 #include "polly/Support/SCEVValidator.h"
 #include "polly/Support/ScopHelper.h"
 #include "polly/Support/ScopLocation.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/Loads.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/Analysis/RegionInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/DiagnosticInfo.h"
@@ -76,27 +70,15 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/Regex.h"
 #include "llvm/Support/raw_ostream.h"
-#include <algorithm>
 #include <cassert>
-#include <memory>
-#include <stack>
-#include <string>
-#include <utility>
-#include <vector>
 
 using namespace llvm;
 using namespace polly;
@@ -487,7 +469,7 @@ bool ScopDetection::onlyValidRequiredInvariantLoads(
 
     for (auto NonAffineRegion : Context.NonAffineSubRegionSet) {
       if (isSafeToLoadUnconditionally(Load->getPointerOperand(),
-                                      Load->getAlignment(), DL))
+                                      Load->getType(), Load->getAlign(), DL))
         continue;
 
       if (NonAffineRegion->contains(Load) &&
@@ -713,6 +695,8 @@ bool ScopDetection::isValidCallInst(CallInst &CI,
       return false;
     case FMRB_DoesNotAccessMemory:
     case FMRB_OnlyReadsMemory:
+    case FMRB_OnlyReadsInaccessibleMem:
+    case FMRB_OnlyReadsInaccessibleOrArgMem:
       // Implicitly disable delinearization since we have an unknown
       // accesses with an unknown access function.
       Context.HasUnknownAccess = true;
@@ -722,6 +706,7 @@ bool ScopDetection::isValidCallInst(CallInst &CI,
       return true;
     case FMRB_OnlyReadsArgumentPointees:
     case FMRB_OnlyAccessesArgumentPointees:
+    case FMRB_OnlyWritesArgumentPointees:
       for (const auto &Arg : CI.arg_operands()) {
         if (!Arg->getType()->isPointerTy())
           continue;
@@ -745,7 +730,9 @@ bool ScopDetection::isValidCallInst(CallInst &CI,
       // pointer into the alias set.
       Context.AST.addUnknown(&CI);
       return true;
-    case FMRB_DoesNotReadMemory:
+    case FMRB_OnlyWritesMemory:
+    case FMRB_OnlyWritesInaccessibleMem:
+    case FMRB_OnlyWritesInaccessibleOrArgMem:
     case FMRB_OnlyAccessesInaccessibleMem:
     case FMRB_OnlyAccessesInaccessibleOrArgMem:
       return false;
@@ -932,7 +919,9 @@ bool ScopDetection::hasValidArraySizes(DetectionContext &Context,
   Value *BaseValue = BasePointer->getValue();
   Region &CurRegion = Context.CurRegion;
   for (const SCEV *DelinearizedSize : Sizes) {
-    if (!isAffine(DelinearizedSize, Scope, Context)) {
+    // Don't pass down the scope to isAfffine; array dimensions must be
+    // invariant across the entire scop.
+    if (!isAffine(DelinearizedSize, nullptr, Context)) {
       Sizes.clear();
       break;
     }
@@ -1668,7 +1657,8 @@ bool ScopDetection::isValidRegion(DetectionContext &Context) const {
                                             CurRegion.getExit(), DbgLoc);
   }
 
-  if (!CurRegion.getEntry()->getName().count(OnlyRegion)) {
+  if (!OnlyRegion.empty() &&
+      !CurRegion.getEntry()->getName().count(OnlyRegion)) {
     LLVM_DEBUG({
       dbgs() << "Region entry does not match -polly-region-only";
       dbgs() << "\n";

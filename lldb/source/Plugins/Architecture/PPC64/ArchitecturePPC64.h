@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_PLUGIN_ARCHITECTURE_PPC64_H
-#define LLDB_PLUGIN_ARCHITECTURE_PPC64_H
+#ifndef LLDB_SOURCE_PLUGINS_ARCHITECTURE_PPC64_ARCHITECTUREPPC64_H
+#define LLDB_SOURCE_PLUGINS_ARCHITECTURE_PPC64_ARCHITECTUREPPC64_H
 
 #include "lldb/Core/Architecture.h"
 
@@ -24,10 +24,8 @@ public:
 
   void OverrideStopInfo(Thread &thread) const override {}
 
-  //------------------------------------------------------------------
   /// This method compares current address with current function's
   /// local entry point, returning the bytes to skip if they match.
-  //------------------------------------------------------------------
   size_t GetBytesToSkip(Symbol &func, const Address &curr_addr) const override;
 
   void AdjustBreakpointAddress(const Symbol &func,
@@ -40,4 +38,4 @@ private:
 
 } // namespace lldb_private
 
-#endif // LLDB_PLUGIN_ARCHITECTURE_PPC64_H
+#endif // LLDB_SOURCE_PLUGINS_ARCHITECTURE_PPC64_ARCHITECTUREPPC64_H

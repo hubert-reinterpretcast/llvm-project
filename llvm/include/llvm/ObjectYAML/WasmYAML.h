@@ -38,6 +38,7 @@ LLVM_YAML_STRONG_TYPEDEF(uint32_t, SymbolKind)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, SegmentFlags)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, LimitFlags)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, ComdatKind)
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, FeaturePolicyPrefix)
 
 struct FileHeader {
   yaml::Hex32 Version;
@@ -106,8 +107,10 @@ struct Function {
 struct Relocation {
   RelocType Type;
   uint32_t Index;
+  // TODO(wvo): this would strictly be better as Hex64, but that will change
+  // all existing obj2yaml output.
   yaml::Hex32 Offset;
-  int32_t Addend;
+  int64_t Addend;
 };
 
 struct DataSegment {
@@ -128,6 +131,11 @@ struct ProducerEntry {
   std::string Version;
 };
 
+struct FeatureEntry {
+  FeaturePolicyPrefix Prefix;
+  std::string Name;
+};
+
 struct SegmentInfo {
   uint32_t Index;
   StringRef Name;
@@ -139,7 +147,7 @@ struct Signature {
   uint32_t Index;
   SignatureForm Form = wasm::WASM_TYPE_FUNC;
   std::vector<ValueType> ParamTypes;
-  ValueType ReturnType;
+  std::vector<ValueType> ReturnTypes;
 };
 
 struct SymbolInfo {
@@ -242,6 +250,17 @@ struct ProducersSection : CustomSection {
   std::vector<ProducerEntry> SDKs;
 };
 
+struct TargetFeaturesSection : CustomSection {
+  TargetFeaturesSection() : CustomSection("target_features") {}
+
+  static bool classof(const Section *S) {
+    auto C = dyn_cast<CustomSection>(S);
+    return C && C->Name == "target_features";
+  }
+
+  std::vector<FeatureEntry> Features;
+};
+
 struct TypeSection : Section {
   TypeSection() : Section(wasm::WASM_SEC_TYPE) {}
 
@@ -292,16 +311,6 @@ struct MemorySection : Section {
   std::vector<Limits> Memories;
 };
 
-struct GlobalSection : Section {
-  GlobalSection() : Section(wasm::WASM_SEC_GLOBAL) {}
-
-  static bool classof(const Section *S) {
-    return S->Type == wasm::WASM_SEC_GLOBAL;
-  }
-
-  std::vector<Global> Globals;
-};
-
 struct EventSection : Section {
   EventSection() : Section(wasm::WASM_SEC_EVENT) {}
 
@@ -310,6 +319,16 @@ struct EventSection : Section {
   }
 
   std::vector<Event> Events;
+};
+
+struct GlobalSection : Section {
+  GlobalSection() : Section(wasm::WASM_SEC_GLOBAL) {}
+
+  static bool classof(const Section *S) {
+    return S->Type == wasm::WASM_SEC_GLOBAL;
+  }
+
+  std::vector<Global> Globals;
 };
 
 struct ExportSection : Section {
@@ -362,6 +381,16 @@ struct DataSection : Section {
   std::vector<DataSegment> Segments;
 };
 
+struct DataCountSection : Section {
+  DataCountSection() : Section(wasm::WASM_SEC_DATACOUNT) {}
+
+  static bool classof(const Section *S) {
+    return S->Type == wasm::WASM_SEC_DATACOUNT;
+  }
+
+  uint32_t Count;
+};
+
 struct Object {
   FileHeader Header;
   std::vector<std::unique_ptr<Section>> Sections;
@@ -385,6 +414,7 @@ LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::LocalDecl)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::Relocation)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::NameEntry)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::ProducerEntry)
+LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::FeatureEntry)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::SegmentInfo)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::SymbolInfo)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::InitFunction)
@@ -465,6 +495,14 @@ template <> struct MappingTraits<WasmYAML::NameEntry> {
 
 template <> struct MappingTraits<WasmYAML::ProducerEntry> {
   static void mapping(IO &IO, WasmYAML::ProducerEntry &ProducerEntry);
+};
+
+template <> struct ScalarEnumerationTraits<WasmYAML::FeaturePolicyPrefix> {
+  static void enumeration(IO &IO, WasmYAML::FeaturePolicyPrefix &Prefix);
+};
+
+template <> struct MappingTraits<WasmYAML::FeatureEntry> {
+  static void mapping(IO &IO, WasmYAML::FeatureEntry &FeatureEntry);
 };
 
 template <> struct MappingTraits<WasmYAML::SegmentInfo> {

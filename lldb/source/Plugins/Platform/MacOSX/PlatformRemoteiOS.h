@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_PlatformRemoteiOS_h_
-#define liblldb_PlatformRemoteiOS_h_
+#ifndef LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMREMOTEIOS_H
+#define LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMREMOTEIOS_H
 
 #include <string>
 
@@ -22,9 +22,7 @@ public:
 
   ~PlatformRemoteiOS() override = default;
 
-  //------------------------------------------------------------
   // Class Functions
-  //------------------------------------------------------------
   static lldb::PlatformSP CreateInstance(bool force,
                                          const lldb_private::ArchSpec *arch);
 
@@ -36,15 +34,11 @@ public:
 
   static const char *GetDescriptionStatic();
 
-  //------------------------------------------------------------
   // lldb_private::Platform functions
-  //------------------------------------------------------------
 
   const char *GetDescription() override { return GetDescriptionStatic(); }
 
-  //------------------------------------------------------------
   // lldb_private::PluginInterface functions
-  //------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override {
     return GetPluginNameStatic();
   }
@@ -56,16 +50,15 @@ public:
 
 protected:
 
-  //------------------------------------------------------------
   // lldb_private::PlatformRemoteDarwinDevice functions
-  //------------------------------------------------------------
 
   void GetDeviceSupportDirectoryNames (std::vector<std::string> &dirnames) override;
 
   std::string GetPlatformName () override;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(PlatformRemoteiOS);
+  PlatformRemoteiOS(const PlatformRemoteiOS &) = delete;
+  const PlatformRemoteiOS &operator=(const PlatformRemoteiOS &) = delete;
 };
 
-#endif // liblldb_PlatformRemoteiOS_h_
+#endif // LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMREMOTEIOS_H

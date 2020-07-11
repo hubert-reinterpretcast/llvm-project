@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueArch_h_
-#define liblldb_OptionValueArch_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUEARCH_H
+#define LLDB_INTERPRETER_OPTIONVALUEARCH_H
 
 #include "lldb/Interpreter/OptionValue.h"
 #include "lldb/Utility/ArchSpec.h"
@@ -33,9 +33,7 @@ public:
 
   ~OptionValueArch() override {}
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeArch; }
 
@@ -57,12 +55,10 @@ public:
 
   lldb::OptionValueSP DeepCopy() const override;
 
-  size_t AutoComplete(CommandInterpreter &interpreter,
-                      lldb_private::CompletionRequest &request) override;
+  void AutoComplete(CommandInterpreter &interpreter,
+                    lldb_private::CompletionRequest &request) override;
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   ArchSpec &GetCurrentValue() { return m_current_value; }
 
@@ -85,4 +81,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueArch_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUEARCH_H

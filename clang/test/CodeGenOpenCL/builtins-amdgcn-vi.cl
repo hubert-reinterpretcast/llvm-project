@@ -1,5 +1,8 @@
 // REQUIRES: amdgpu-registered-target
 // RUN: %clang_cc1 -triple amdgcn-unknown-unknown -target-cpu tonga -S -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple amdgcn-unknown-unknown -target-cpu gfx900 -S -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple amdgcn-unknown-unknown -target-cpu gfx1010 -S -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple amdgcn-unknown-unknown -target-cpu gfx1012 -S -emit-llvm -o - %s | FileCheck %s
 
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
@@ -17,6 +20,13 @@ void test_div_fixup_f16(global half* out, half a, half b, half c)
 void test_rcp_f16(global half* out, half a)
 {
   *out = __builtin_amdgcn_rcph(a);
+}
+
+// CHECK-LABEL: @test_sqrt_f16
+// CHECK: call half @llvm.amdgcn.sqrt.f16
+void test_sqrt_f16(global half* out, half a)
+{
+  *out = __builtin_amdgcn_sqrth(a);
 }
 
 // CHECK-LABEL: @test_rsq_f16

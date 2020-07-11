@@ -17,16 +17,27 @@ namespace clang {
 namespace tidy {
 namespace readability {
 
+AST_MATCHER(FunctionDecl, doesDeclarationForceExternallyVisibleDefinition) {
+  return Node.doesDeclarationForceExternallyVisibleDefinition();
+}
+
 RedundantDeclarationCheck::RedundantDeclarationCheck(StringRef Name,
                                                      ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
       IgnoreMacros(Options.getLocalOrGlobal("IgnoreMacros", true)) {}
 
+void RedundantDeclarationCheck::storeOptions(
+    ClangTidyOptions::OptionMap &Opts) {
+  Options.store(Opts, "IgnoreMacros", IgnoreMacros);
+}
+
 void RedundantDeclarationCheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(
       namedDecl(anyOf(varDecl(unless(isDefinition())),
-                      functionDecl(unless(anyOf(isDefinition(), isDefaulted(),
-                                                hasParent(friendDecl()))))))
+                      functionDecl(unless(anyOf(
+                          isDefinition(), isDefaulted(),
+                          doesDeclarationForceExternallyVisibleDefinition(),
+                          hasParent(friendDecl()))))))
           .bind("Decl"),
       this);
 }
@@ -75,7 +86,6 @@ void RedundantDeclarationCheck::check(const MatchFinder::MatchResult &Result) {
   }
   diag(Prev->getLocation(), "previously declared here", DiagnosticIDs::Note);
 }
-
 } // namespace readability
 } // namespace tidy
 } // namespace clang

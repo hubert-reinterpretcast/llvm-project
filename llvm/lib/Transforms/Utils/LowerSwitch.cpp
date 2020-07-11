@@ -27,6 +27,7 @@
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Value.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
@@ -62,9 +63,8 @@ static bool IsInRanges(const IntRange &R,
   // Find the first range whose High field is >= R.High,
   // then check if the Low field is <= R.Low. If so, we
   // have a Range that covers R.
-  auto I = std::lower_bound(
-      Ranges.begin(), Ranges.end(), R,
-      [](const IntRange &A, const IntRange &B) { return A.High < B.High; });
+  auto I = llvm::lower_bound(
+      Ranges, R, [](IntRange A, IntRange B) { return A.High < B.High; });
   return I != Ranges.end() && I->Low <= R.Low;
 }
 
@@ -148,13 +148,6 @@ bool LowerSwitch::runOnFunction(Function &F) {
   LazyValueInfo *LVI = &getAnalysis<LazyValueInfoWrapperPass>().getLVI();
   auto *ACT = getAnalysisIfAvailable<AssumptionCacheTracker>();
   AssumptionCache *AC = ACT ? &ACT->getAssumptionCache(F) : nullptr;
-  // Prevent LazyValueInfo from using the DominatorTree as LowerSwitch does not
-  // preserve it and it becomes stale (when available) pretty much immediately.
-  // Currently the DominatorTree is only used by LowerSwitch indirectly via LVI
-  // and computeKnownBits to refine isValidAssumeForContext's results. Given
-  // that the latter can handle some of the simple cases w/o a DominatorTree,
-  // it's easier to refrain from using the tree than to keep it up to date.
-  LVI->disableDT();
 
   bool Changed = false;
   SmallPtrSet<BasicBlock*, 8> DeleteList;
@@ -436,14 +429,6 @@ unsigned LowerSwitch::Clusterify(CaseVector& Cases, SwitchInst *SI) {
   return NumSimpleCases;
 }
 
-static ConstantRange getConstantRangeFromKnownBits(const KnownBits &Known) {
-  APInt Lower = Known.One;
-  APInt Upper = ~Known.Zero + 1;
-  if (Upper == Lower)
-    return ConstantRange(Known.getBitWidth(), /*isFullSet=*/true);
-  return ConstantRange(Lower, Upper);
-}
-
 /// Replace the specified switch instruction with a sequence of chained if-then
 /// insts in a balanced binary search.
 void LowerSwitch::processSwitchInst(SwitchInst *SI,
@@ -501,7 +486,9 @@ void LowerSwitch::processSwitchInst(SwitchInst *SI,
     //    switch, while LowerSwitch only needs to call LVI once per switch.
     const DataLayout &DL = F->getParent()->getDataLayout();
     KnownBits Known = computeKnownBits(Val, DL, /*Depth=*/0, AC, SI);
-    ConstantRange KnownBitsRange = getConstantRangeFromKnownBits(Known);
+    // TODO Shouldn't this create a signed range?
+    ConstantRange KnownBitsRange =
+        ConstantRange::fromKnownBits(Known, /*IsSigned=*/false);
     const ConstantRange LVIRange = LVI->getConstantRange(Val, OrigBlock, SI);
     ConstantRange ValRange = KnownBitsRange.intersectWith(LVIRange);
     // We delegate removal of unreachable non-default cases to other passes. In
@@ -591,6 +578,11 @@ void LowerSwitch::processSwitchInst(SwitchInst *SI,
         PopSucc->removePredecessor(OrigBlock);
       return;
     }
+
+    // If the condition was a PHI node with the switch block as a predecessor
+    // removing predecessors may have caused the condition to be erased.
+    // Getting the condition value again here protects against that.
+    Val = SI->getCondition();
   }
 
   // Create a new, empty default block so that the new hierarchy of

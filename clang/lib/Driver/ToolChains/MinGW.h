@@ -13,6 +13,7 @@
 #include "Gnu.h"
 #include "clang/Driver/Tool.h"
 #include "clang/Driver/ToolChain.h"
+#include "llvm/Support/ErrorOr.h"
 
 namespace clang {
 namespace driver {

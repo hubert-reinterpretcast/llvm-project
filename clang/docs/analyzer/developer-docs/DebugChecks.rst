@@ -15,7 +15,7 @@ General Analysis Dumpers
 
 These checkers are used to dump the results of various infrastructural analyses
 to stderr. Some checkers also have "view" variants, which will display a graph
-using a 'dot' format viewer (such as Graphviz on OS X) instead.
+using a 'dot' format viewer (such as Graphviz on macOS) instead.
 
 - debug.DumpCallGraph, debug.ViewCallGraph: Show the call graph generated for
   the current translation unit. This is used to determine the order in which to
@@ -275,6 +275,28 @@ ExprInspection checks
 
   See clang_analyzer_denote().
 
+- ``void clang_analyzer_isTainted(a single argument of any type);``
+
+  Queries the analyzer whether the expression used as argument is tainted or not.
+  This is useful in tests, where we don't want to issue warning for all tainted
+  expressions but only check for certain expressions.
+  This would help to reduce the *noise* that the `TaintTest` debug checker would
+  introduce and let you focus on the `expected-warning`'s that you really care
+  about.
+
+  Example usage::
+
+    int read_integer() {
+      int n;
+      clang_analyzer_isTainted(n);     // expected-warning{{NO}}
+      scanf("%d", &n);
+      clang_analyzer_isTainted(n);     // expected-warning{{YES}}
+      clang_analyzer_isTainted(n + 2); // expected-warning{{YES}}
+      clang_analyzer_isTainted(n > 0); // expected-warning{{YES}}
+      int next_tainted_value = n; // no-warning
+      return n;
+    }
+
 Statistics
 ==========
 
@@ -285,3 +307,10 @@ There is also an additional -analyzer-stats flag, which enables various
 statistics within the analyzer engine. Note the Stats checker (which produces at
 least one bug report per function) may actually change the values reported by
 -analyzer-stats.
+
+Output testing checkers
+=======================
+
+- debug.ReportStmts reports a warning at **every** statement, making it a very
+  useful tool for testing thoroughly bug report construction and output
+  emission.

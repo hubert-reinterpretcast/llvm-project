@@ -44,9 +44,6 @@ const char LambdaId[] = "lambda";
 } // namespace
 
 void RedundantVoidArgCheck::registerMatchers(MatchFinder *Finder) {
-  if (!getLangOpts().CPlusPlus)
-    return;
-
   Finder->addMatcher(functionDecl(parameterCountIs(0), unless(isImplicit()),
                                   unless(isInstantiated()), unless(isExternC()))
                          .bind(FunctionId),
@@ -101,10 +98,15 @@ void RedundantVoidArgCheck::check(const MatchFinder::MatchResult &Result) {
 void RedundantVoidArgCheck::processFunctionDecl(
     const MatchFinder::MatchResult &Result, const FunctionDecl *Function) {
   if (Function->isThisDeclarationADefinition()) {
-    const Stmt *Body = Function->getBody();
     SourceLocation Start = Function->getBeginLoc();
-    SourceLocation End =
-        Body ? Body->getBeginLoc().getLocWithOffset(-1) : Function->getEndLoc();
+    SourceLocation End = Function->getEndLoc();
+    if (const Stmt *Body = Function->getBody()) {
+      End = Body->getBeginLoc();
+      if (End.isMacroID() &&
+          Result.SourceManager->isAtStartOfImmediateMacroExpansion(End))
+        End = Result.SourceManager->getExpansionLoc(End);
+      End = End.getLocWithOffset(-1);
+    }
     removeVoidArgumentTokens(Result, SourceRange(Start, End),
                              "function definition");
   } else {
@@ -172,10 +174,8 @@ void RedundantVoidArgCheck::removeVoidArgumentTokens(
 
 void RedundantVoidArgCheck::removeVoidToken(Token VoidToken,
                                             StringRef Diagnostic) {
-  SourceLocation VoidLoc(VoidToken.getLocation());
-  auto VoidRange =
-      CharSourceRange::getTokenRange(VoidLoc, VoidLoc.getLocWithOffset(3));
-  diag(VoidLoc, Diagnostic) << FixItHint::CreateRemoval(VoidRange);
+  SourceLocation VoidLoc = VoidToken.getLocation();
+  diag(VoidLoc, Diagnostic) << FixItHint::CreateRemoval(VoidLoc);
 }
 
 void RedundantVoidArgCheck::processTypedefNameDecl(

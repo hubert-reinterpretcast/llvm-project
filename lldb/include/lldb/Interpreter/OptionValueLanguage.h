@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueLanguage_h_
-#define liblldb_OptionValueLanguage_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUELANGUAGE_H
+#define LLDB_INTERPRETER_OPTIONVALUELANGUAGE_H
 
 #include "lldb/Interpreter/OptionValue.h"
 #include "lldb/lldb-enumerations.h"
@@ -27,9 +27,7 @@ public:
 
   ~OptionValueLanguage() override {}
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeLanguage; }
 
@@ -51,9 +49,7 @@ public:
 
   lldb::OptionValueSP DeepCopy() const override;
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   lldb::LanguageType GetCurrentValue() const { return m_current_value; }
 
@@ -70,4 +66,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueLanguage_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUELANGUAGE_H

@@ -17,7 +17,6 @@
 #define LLVM_OBJECT_WASM_H
 
 #include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/BinaryFormat/Wasm.h"
 #include "llvm/Config/llvm-config.h"
@@ -130,6 +129,9 @@ public:
 
   const wasm::WasmDylinkInfo &dylinkInfo() const { return DylinkInfo; }
   const wasm::WasmProducerInfo &getProducerInfo() const { return ProducerInfo; }
+  ArrayRef<wasm::WasmFeatureEntry> getTargetFeatures() const {
+    return TargetFeatures;
+  }
   ArrayRef<wasm::WasmSignature> types() const { return Signatures; }
   ArrayRef<uint32_t> functionTypes() const { return FunctionTypes; }
   ArrayRef<wasm::WasmImport> imports() const { return Imports; }
@@ -149,9 +151,10 @@ public:
   uint32_t getNumImportedGlobals() const { return NumImportedGlobals; }
   uint32_t getNumImportedFunctions() const { return NumImportedFunctions; }
   uint32_t getNumImportedEvents() const { return NumImportedEvents; }
+  uint32_t getNumSections() const { return Sections.size(); }
   void moveSymbolNext(DataRefImpl &Symb) const override;
 
-  uint32_t getSymbolFlags(DataRefImpl Symb) const override;
+  Expected<uint32_t> getSymbolFlags(DataRefImpl Symb) const override;
 
   basic_symbol_iterator symbol_begin() const override;
 
@@ -165,23 +168,22 @@ public:
   uint64_t getCommonSymbolSizeImpl(DataRefImpl Symb) const override;
   Expected<SymbolRef::Type> getSymbolType(DataRefImpl Symb) const override;
   Expected<section_iterator> getSymbolSection(DataRefImpl Symb) const override;
+  uint32_t getSymbolSectionId(SymbolRef Sym) const;
 
   // Overrides from SectionRef.
   void moveSectionNext(DataRefImpl &Sec) const override;
-  std::error_code getSectionName(DataRefImpl Sec,
-                                 StringRef &Res) const override;
+  Expected<StringRef> getSectionName(DataRefImpl Sec) const override;
   uint64_t getSectionAddress(DataRefImpl Sec) const override;
   uint64_t getSectionIndex(DataRefImpl Sec) const override;
   uint64_t getSectionSize(DataRefImpl Sec) const override;
-  std::error_code getSectionContents(DataRefImpl Sec,
-                                     StringRef &Res) const override;
+  Expected<ArrayRef<uint8_t>>
+  getSectionContents(DataRefImpl Sec) const override;
   uint64_t getSectionAlignment(DataRefImpl Sec) const override;
   bool isSectionCompressed(DataRefImpl Sec) const override;
   bool isSectionText(DataRefImpl Sec) const override;
   bool isSectionData(DataRefImpl Sec) const override;
   bool isSectionBSS(DataRefImpl Sec) const override;
   bool isSectionVirtual(DataRefImpl Sec) const override;
-  bool isSectionBitcode(DataRefImpl Sec) const override;
   relocation_iterator section_rel_begin(DataRefImpl Sec) const override;
   relocation_iterator section_rel_end(DataRefImpl Sec) const override;
 
@@ -227,6 +229,7 @@ private:
 
   const WasmSection &getWasmSection(DataRefImpl Ref) const;
   const wasm::WasmRelocation &getWasmRelocation(DataRefImpl Ref) const;
+  uint32_t getSymbolSectionIdImpl(const WasmSymbol &Symb) const;
 
   Error parseSection(WasmSection &Sec);
   Error parseCustomSection(WasmSection &Sec, ReadContext &Ctx);
@@ -237,13 +240,14 @@ private:
   Error parseFunctionSection(ReadContext &Ctx);
   Error parseTableSection(ReadContext &Ctx);
   Error parseMemorySection(ReadContext &Ctx);
-  Error parseGlobalSection(ReadContext &Ctx);
   Error parseEventSection(ReadContext &Ctx);
+  Error parseGlobalSection(ReadContext &Ctx);
   Error parseExportSection(ReadContext &Ctx);
   Error parseStartSection(ReadContext &Ctx);
   Error parseElemSection(ReadContext &Ctx);
   Error parseCodeSection(ReadContext &Ctx);
   Error parseDataSection(ReadContext &Ctx);
+  Error parseDataCountSection(ReadContext &Ctx);
 
   // Custom section types
   Error parseDylinkSection(ReadContext &Ctx);
@@ -252,12 +256,14 @@ private:
   Error parseLinkingSectionSymtab(ReadContext &Ctx);
   Error parseLinkingSectionComdat(ReadContext &Ctx);
   Error parseProducersSection(ReadContext &Ctx);
+  Error parseTargetFeaturesSection(ReadContext &Ctx);
   Error parseRelocSection(StringRef Name, ReadContext &Ctx);
 
   wasm::WasmObjectHeader Header;
   std::vector<WasmSection> Sections;
   wasm::WasmDylinkInfo DylinkInfo;
   wasm::WasmProducerInfo ProducerInfo;
+  std::vector<wasm::WasmFeatureEntry> TargetFeatures;
   std::vector<wasm::WasmSignature> Signatures;
   std::vector<uint32_t> FunctionTypes;
   std::vector<wasm::WasmTable> Tables;
@@ -268,20 +274,22 @@ private:
   std::vector<wasm::WasmExport> Exports;
   std::vector<wasm::WasmElemSegment> ElemSegments;
   std::vector<WasmSegment> DataSegments;
+  llvm::Optional<size_t> DataCount;
   std::vector<wasm::WasmFunction> Functions;
   std::vector<WasmSymbol> Symbols;
   std::vector<wasm::WasmFunctionName> DebugNames;
   uint32_t StartFunction = -1;
   bool HasLinkingSection = false;
   bool HasDylinkSection = false;
+  bool SeenCodeSection = false;
   wasm::WasmLinkingData LinkingData;
   uint32_t NumImportedGlobals = 0;
   uint32_t NumImportedFunctions = 0;
   uint32_t NumImportedEvents = 0;
   uint32_t CodeSection = 0;
   uint32_t DataSection = 0;
-  uint32_t GlobalSection = 0;
   uint32_t EventSection = 0;
+  uint32_t GlobalSection = 0;
 };
 
 class WasmSectionOrderChecker {
@@ -297,8 +305,8 @@ public:
     WASM_SEC_ORDER_FUNCTION,
     WASM_SEC_ORDER_TABLE,
     WASM_SEC_ORDER_MEMORY,
-    WASM_SEC_ORDER_GLOBAL,
     WASM_SEC_ORDER_EVENT,
+    WASM_SEC_ORDER_GLOBAL,
     WASM_SEC_ORDER_EXPORT,
     WASM_SEC_ORDER_START,
     WASM_SEC_ORDER_ELEM,
@@ -318,6 +326,8 @@ public:
     WASM_SEC_ORDER_NAME,
     // "producers" section must appear after "name" section.
     WASM_SEC_ORDER_PRODUCERS,
+    // "target_features" section must appear after producers section
+    WASM_SEC_ORDER_TARGET_FEATURES,
 
     // Must be last
     WASM_NUM_SEC_ORDERS

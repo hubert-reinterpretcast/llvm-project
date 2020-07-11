@@ -1,4 +1,4 @@
-//===-- ModuleChild.cpp -----------------------------------------*- C++ -*-===//
+//===-- ModuleChild.cpp ---------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,9 +12,6 @@ using namespace lldb_private;
 
 ModuleChild::ModuleChild(const lldb::ModuleSP &module_sp)
     : m_module_wp(module_sp) {}
-
-ModuleChild::ModuleChild(const ModuleChild &rhs)
-    : m_module_wp(rhs.m_module_wp) {}
 
 ModuleChild::~ModuleChild() {}
 

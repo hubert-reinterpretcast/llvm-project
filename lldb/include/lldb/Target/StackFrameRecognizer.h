@@ -6,19 +6,20 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_StackFrameRecognizer_h_
-#define liblldb_StackFrameRecognizer_h_
+#ifndef LLDB_TARGET_STACKFRAMERECOGNIZER_H
+#define LLDB_TARGET_STACKFRAMERECOGNIZER_H
 
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectList.h"
 #include "lldb/Symbol/VariableList.h"
+#include "lldb/Target/StopInfo.h"
 #include "lldb/Utility/StructuredData.h"
 #include "lldb/lldb-private-forward.h"
 #include "lldb/lldb-public.h"
 
 namespace lldb_private {
 
-/// @class RecognizedStackFrame
+/// \class RecognizedStackFrame
 ///
 /// This class provides extra information about a stack frame that was
 /// provided by a specific stack frame recognizer. Right now, this class only
@@ -33,13 +34,17 @@ public:
   virtual lldb::ValueObjectSP GetExceptionObject() {
     return lldb::ValueObjectSP();
   }
+  virtual lldb::StackFrameSP GetMostRelevantFrame() { return nullptr; };
   virtual ~RecognizedStackFrame(){};
+
+  std::string GetStopDescription() { return m_stop_desc; }
 
 protected:
   lldb::ValueObjectListSP m_arguments;
+  std::string m_stop_desc;
 };
 
-/// @class StackFrameRecognizer
+/// \class StackFrameRecognizer
 ///
 /// A base class for frame recognizers. Subclasses (actual frame recognizers)
 /// should implement RecognizeFrame to provide a RecognizedStackFrame for a
@@ -59,9 +64,7 @@ public:
   virtual ~StackFrameRecognizer(){};
 };
 
-#ifndef LLDB_DISABLE_PYTHON
-
-/// @class ScriptedStackFrameRecognizer
+/// \class ScriptedStackFrameRecognizer
 ///
 /// Python implementation for frame recognizers. An instance of this class
 /// tracks a particular Python classobject, which will be asked to recognize
@@ -75,7 +78,7 @@ class ScriptedStackFrameRecognizer : public StackFrameRecognizer {
 public:
   ScriptedStackFrameRecognizer(lldb_private::ScriptInterpreter *interpreter,
                                const char *pclass);
-  ~ScriptedStackFrameRecognizer() {}
+  ~ScriptedStackFrameRecognizer() override {}
 
   std::string GetName() override {
     return GetPythonClassName();
@@ -87,12 +90,12 @@ public:
       lldb::StackFrameSP frame) override;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ScriptedStackFrameRecognizer);
+  ScriptedStackFrameRecognizer(const ScriptedStackFrameRecognizer &) = delete;
+  const ScriptedStackFrameRecognizer &
+  operator=(const ScriptedStackFrameRecognizer &) = delete;
 };
 
-#endif
-
-/// @class StackFrameRecognizerManager
+/// \class StackFrameRecognizerManager
 ///
 /// Static class that provides a registry of known stack frame recognizers.
 /// Has static methods to add, enumerate, remove, query and invoke recognizers.
@@ -100,8 +103,8 @@ private:
 class StackFrameRecognizerManager {
 public:
   static void AddRecognizer(lldb::StackFrameRecognizerSP recognizer,
-                            const ConstString &module,
-                            const ConstString &symbol,
+                            ConstString module,
+                            llvm::ArrayRef<ConstString> symbols,
                             bool first_instruction_only = true);
 
   static void AddRecognizer(lldb::StackFrameRecognizerSP recognizer,
@@ -109,10 +112,11 @@ public:
                             lldb::RegularExpressionSP symbol,
                             bool first_instruction_only = true);
 
-  static void ForEach(
-      std::function<void(uint32_t recognizer_id, std::string recognizer_name,
-                         std::string module, std::string symbol,
-                         bool regexp)> const &callback);
+  static void
+  ForEach(std::function<void(uint32_t recognizer_id,
+                             std::string recognizer_name, std::string module,
+                             llvm::ArrayRef<ConstString> symbols,
+                             bool regexp)> const &callback);
 
   static bool RemoveRecognizerWithID(uint32_t recognizer_id);
 
@@ -124,7 +128,7 @@ public:
   static lldb::RecognizedStackFrameSP RecognizeFrame(lldb::StackFrameSP frame);
 };
 
-/// @class ValueObjectRecognizerSynthesizedValue
+/// \class ValueObjectRecognizerSynthesizedValue
 ///
 /// ValueObject subclass that presents the passed ValueObject as a recognized
 /// value with the specified ValueType. Frame recognizers should return
@@ -162,4 +166,4 @@ class ValueObjectRecognizerSynthesizedValue : public ValueObject {
 
 } // namespace lldb_private
 
-#endif // liblldb_StackFrameRecognizer_h_
+#endif // LLDB_TARGET_STACKFRAMERECOGNIZER_H

@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_CORE_DATABUFFERLLVM_H
-#define LLDB_CORE_DATABUFFERLLVM_H
+#ifndef LLDB_UTILITY_DATABUFFERLLVM_H
+#define LLDB_UTILITY_DATABUFFERLLVM_H
 
 #include "lldb/Utility/DataBuffer.h"
 #include "lldb/lldb-types.h"
@@ -25,7 +25,7 @@ namespace lldb_private {
 class FileSystem;
 class DataBufferLLVM : public DataBuffer {
 public:
-  ~DataBufferLLVM();
+  ~DataBufferLLVM() override;
 
   uint8_t *GetBytes() override;
   const uint8_t *GetBytes() const override;

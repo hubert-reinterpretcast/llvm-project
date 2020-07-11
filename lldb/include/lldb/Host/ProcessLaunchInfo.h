@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_ProcessLaunch_Info_h
-#define liblldb_ProcessLaunch_Info_h
+#ifndef LLDB_HOST_PROCESSLAUNCHINFO_H
+#define LLDB_HOST_PROCESSLAUNCHINFO_H
 
 // C++ Headers
 #include <string>
@@ -17,17 +17,15 @@
 
 #include "lldb/Host/FileAction.h"
 #include "lldb/Host/Host.h"
-#include "lldb/Host/ProcessInfo.h"
 #include "lldb/Host/PseudoTerminal.h"
 #include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/ProcessInfo.h"
 
 namespace lldb_private {
 
-//----------------------------------------------------------------------
 // ProcessLaunchInfo
 //
 // Describes any information that is required to launch a process.
-//----------------------------------------------------------------------
 
 class ProcessLaunchInfo : public ProcessInfo {
 public:
@@ -167,4 +165,4 @@ protected:
 };
 }
 
-#endif // liblldb_ProcessLaunch_Info_h
+#endif // LLDB_HOST_PROCESSLAUNCHINFO_H

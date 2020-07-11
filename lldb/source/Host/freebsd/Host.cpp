@@ -1,5 +1,4 @@
-//===-- source/Host/freebsd/Host.cpp ------------------------------*- C++
-//-*-===//
+//===-- source/Host/freebsd/Host.cpp --------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -23,12 +22,12 @@
 
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
-#include "lldb/Target/Process.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Endian.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/NameMatches.h"
+#include "lldb/Utility/ProcessInfo.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/Utility/StreamString.h"
 
@@ -36,6 +35,10 @@
 
 extern "C" {
 extern char **environ;
+}
+
+namespace lldb_private {
+class ProcessLaunchInfo;
 }
 
 using namespace lldb;
@@ -146,8 +149,8 @@ error:
   return false;
 }
 
-uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
-                             ProcessInstanceInfoList &process_infos) {
+uint32_t Host::FindProcessesImpl(const ProcessInstanceInfoMatch &match_info,
+                                 ProcessInstanceInfoList &process_infos) {
   const ::pid_t our_pid = ::getpid();
   const ::uid_t our_uid = ::getuid();
   std::vector<struct kinfo_proc> kinfos;
@@ -192,10 +195,10 @@ uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
     bool already_registered = false;
     for (uint32_t pi = 0;
          !already_registered && (const int)kinfo.ki_numthreads > 1 &&
-         pi < (const uint32_t)process_infos.GetSize();
+         pi < (const uint32_t)process_infos.size();
          pi++)
       already_registered =
-          (process_infos.GetProcessIDAtIndex(pi) == (uint32_t)kinfo.ki_pid);
+          (process_infos[pi].GetProcessID() == (uint32_t)kinfo.ki_pid);
 
     if (already_registered)
       continue;
@@ -213,11 +216,11 @@ uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
         GetFreeBSDProcessArgs(&match_info, process_info)) {
       GetFreeBSDProcessCPUType(process_info);
       if (match_info.Matches(process_info))
-        process_infos.Append(process_info);
+        process_infos.push_back(process_info);
     }
   }
 
-  return process_infos.GetSize();
+  return process_infos.size();
 }
 
 bool Host::GetProcessInfo(lldb::pid_t pid, ProcessInstanceInfo &process_info) {

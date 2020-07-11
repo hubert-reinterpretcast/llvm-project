@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-// UNSUPPORTED: c++98, c++03
+// UNSUPPORTED: c++03
 
 // <random>
 
@@ -16,10 +16,10 @@
 // piecewise_linear_distribution(initializer_list<result_type> bl,
 //                                 UnaryOperation fw);
 
-#include <iostream>
-
 #include <random>
 #include <cassert>
+
+#include "test_macros.h"
 
 double f(double x)
 {

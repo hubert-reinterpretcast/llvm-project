@@ -35,15 +35,15 @@ multiclass SystemZRegClass<string name, list<ValueType> types, int size,
                            dag regList, bit allocatable = 1> {
   def AsmOperand : AsmOperandClass {
     let Name = name;
-    let ParserMethod = "parse"##name;
+    let ParserMethod = "parse"#name;
     let RenderMethod = "addRegOperands";
   }
   let isAllocatable = allocatable in
     def Bit : RegisterClass<"SystemZ", types, size, regList> {
       let Size = size;
     }
-  def "" : RegisterOperand<!cast<RegisterClass>(name##"Bit")> {
-    let ParserMatchClass = !cast<AsmOperandClass>(name##"AsmOperand");
+  def "" : RegisterOperand<!cast<RegisterClass>(name#"Bit")> {
+    let ParserMatchClass = !cast<AsmOperandClass>(name#"AsmOperand");
   }
 }
 
@@ -294,6 +294,13 @@ def v128any : TypedReg<untyped, VR128>;
 def CC : SystemZReg<"cc">;
 let isAllocatable = 0, CopyCost = -1 in
   def CCR : RegisterClass<"SystemZ", [i32], 32, (add CC)>;
+
+// The floating-point control register.
+// Note: We only model the current rounding modes and the IEEE masks.
+// IEEE flags and DXC are not modeled here.
+def FPC : SystemZReg<"fpc">;
+let isAllocatable = 0 in
+  def FPCRegs : RegisterClass<"SystemZ", [i32], 32, (add FPC)>;
 
 // Access registers.
 class ACR32<bits<16> num, string n> : SystemZReg<n> {

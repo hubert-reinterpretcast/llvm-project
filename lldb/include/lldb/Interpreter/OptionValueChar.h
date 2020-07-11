@@ -1,4 +1,4 @@
-//===-- OptionValueBoolean.h ------------------------------------*- C++ -*-===//
+//===-- OptionValueChar.h ---------------------------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueChar_h_
-#define liblldb_OptionValueChar_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUECHAR_H
+#define LLDB_INTERPRETER_OPTIONVALUECHAR_H
 
 #include "lldb/Interpreter/OptionValue.h"
 
@@ -24,9 +24,7 @@ public:
 
   ~OptionValueChar() override {}
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeChar; }
 
@@ -46,9 +44,7 @@ public:
     return true;
   }
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   const char &operator=(char c) {
     m_current_value = c;
@@ -72,4 +68,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueChar_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUECHAR_H

@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-// UNSUPPORTED: c++98, c++03
+// UNSUPPORTED: c++03
 
 // <experimental/memory_resource>
 
@@ -15,7 +15,6 @@
 // void * do_allocate(size_t size, size_t align)
 // void   do_deallocate(void*, size_t, size_t)
 
-
 #include <experimental/memory_resource>
 #include <type_traits>
 #include <memory>
@@ -23,7 +22,7 @@
 #include <cassert>
 
 #include "test_macros.h"
-#include "test_memory_resource.hpp"
+#include "test_memory_resource.h"
 
 namespace ex = std::experimental::pmr;
 

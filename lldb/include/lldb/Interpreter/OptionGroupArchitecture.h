@@ -6,17 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionGroupArchitecture_h_
-#define liblldb_OptionGroupArchitecture_h_
+#ifndef LLDB_INTERPRETER_OPTIONGROUPARCHITECTURE_H
+#define LLDB_INTERPRETER_OPTIONGROUPARCHITECTURE_H
 
 #include "lldb/Interpreter/Options.h"
 #include "lldb/Utility/ArchSpec.h"
 
 namespace lldb_private {
 
-//-------------------------------------------------------------------------
 // OptionGroupArchitecture
-//-------------------------------------------------------------------------
 
 class OptionGroupArchitecture : public OptionGroup {
 public:
@@ -44,4 +42,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionGroupArchitecture_h_
+#endif // LLDB_INTERPRETER_OPTIONGROUPARCHITECTURE_H

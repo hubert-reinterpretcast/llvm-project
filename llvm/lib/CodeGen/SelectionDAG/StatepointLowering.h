@@ -15,11 +15,9 @@
 #define LLVM_LIB_CODEGEN_SELECTIONDAG_STATEPOINTLOWERING_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallBitVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include <cassert>
 
 namespace llvm {
@@ -66,13 +64,18 @@ public:
   /// before the next statepoint.  If we don't see it, we'll report
   /// an assertion.
   void scheduleRelocCall(const CallInst &RelocCall) {
-    PendingGCRelocateCalls.push_back(&RelocCall);
+    // We are not interested in lowering dead instructions.
+    if (!RelocCall.use_empty())
+      PendingGCRelocateCalls.push_back(&RelocCall);
   }
 
   /// Remove this gc_relocate from the list we're expecting to see
   /// before the next statepoint.  If we weren't expecting to see
   /// it, we'll report an assertion.
   void relocCallVisited(const CallInst &RelocCall) {
+    // We are not interested in lowering dead instructions.
+    if (RelocCall.use_empty())
+      return;
     auto I = llvm::find(PendingGCRelocateCalls, &RelocCall);
     assert(I != PendingGCRelocateCalls.end() &&
            "Visited unexpected gcrelocate call");

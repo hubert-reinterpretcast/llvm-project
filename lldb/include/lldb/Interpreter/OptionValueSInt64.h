@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueSInt64_h_
-#define liblldb_OptionValueSInt64_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUESINT64_H
+#define LLDB_INTERPRETER_OPTIONVALUESINT64_H
 
 #include "lldb/Interpreter/OptionValue.h"
 
@@ -36,9 +36,7 @@ public:
 
   ~OptionValueSInt64() override {}
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeSInt64; }
 
@@ -60,9 +58,7 @@ public:
 
   lldb::OptionValueSP DeepCopy() const override;
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   const int64_t &operator=(int64_t value) {
     m_current_value = value;
@@ -106,4 +102,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueSInt64_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUESINT64_H

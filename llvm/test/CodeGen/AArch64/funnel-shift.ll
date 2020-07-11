@@ -18,12 +18,11 @@ declare <4 x i32> @llvm.fshr.v4i32(<4 x i32>, <4 x i32>, <4 x i32>)
 define i32 @fshl_i32(i32 %x, i32 %y, i32 %z) {
 ; CHECK-LABEL: fshl_i32:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    and w9, w2, #0x1f
+; CHECK-NEXT:    ands w9, w2, #0x1f
 ; CHECK-NEXT:    neg w9, w9
 ; CHECK-NEXT:    lsl w8, w0, w2
 ; CHECK-NEXT:    lsr w9, w1, w9
 ; CHECK-NEXT:    orr w8, w8, w9
-; CHECK-NEXT:    tst w2, #0x1f
 ; CHECK-NEXT:    csel w0, w0, w8, eq
 ; CHECK-NEXT:    ret
   %f = call i32 @llvm.fshl.i32(i32 %x, i32 %y, i32 %z)
@@ -71,7 +70,7 @@ define i7 @fshl_i7_const_fold() {
 define i8 @fshl_i8_const_fold_overshift_1() {
 ; CHECK-LABEL: fshl_i8_const_fold_overshift_1:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    orr w0, wzr, #0x80
+; CHECK-NEXT:    mov w0, #128
 ; CHECK-NEXT:    ret
   %f = call i8 @llvm.fshl.i8(i8 255, i8 0, i8 15)
   ret i8 %f
@@ -80,7 +79,7 @@ define i8 @fshl_i8_const_fold_overshift_1() {
 define i8 @fshl_i8_const_fold_overshift_2() {
 ; CHECK-LABEL: fshl_i8_const_fold_overshift_2:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    orr w0, wzr, #0x78
+; CHECK-NEXT:    mov w0, #120
 ; CHECK-NEXT:    ret
   %f = call i8 @llvm.fshl.i8(i8 15, i8 15, i8 11)
   ret i8 %f
@@ -133,7 +132,7 @@ define i64 @fshl_i64_const_overshift(i64 %x, i64 %y) {
 define i8 @fshl_i8_const_fold() {
 ; CHECK-LABEL: fshl_i8_const_fold:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    orr w0, wzr, #0x80
+; CHECK-NEXT:    mov w0, #128
 ; CHECK-NEXT:    ret
   %f = call i8 @llvm.fshl.i8(i8 255, i8 0, i8 7)
   ret i8 %f
@@ -146,12 +145,11 @@ define i8 @fshl_i8_const_fold() {
 define i32 @fshr_i32(i32 %x, i32 %y, i32 %z) {
 ; CHECK-LABEL: fshr_i32:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    and w9, w2, #0x1f
+; CHECK-NEXT:    ands w9, w2, #0x1f
 ; CHECK-NEXT:    neg w9, w9
 ; CHECK-NEXT:    lsr w8, w1, w2
 ; CHECK-NEXT:    lsl w9, w0, w9
 ; CHECK-NEXT:    orr w8, w9, w8
-; CHECK-NEXT:    tst w2, #0x1f
 ; CHECK-NEXT:    csel w0, w1, w8, eq
 ; CHECK-NEXT:    ret
   %f = call i32 @llvm.fshr.i32(i32 %x, i32 %y, i32 %z)
@@ -190,7 +188,7 @@ declare i7 @llvm.fshr.i7(i7, i7, i7)
 define i7 @fshr_i7_const_fold() {
 ; CHECK-LABEL: fshr_i7_const_fold:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    orr w0, wzr, #0x1f
+; CHECK-NEXT:    mov w0, #31
 ; CHECK-NEXT:    ret
   %f = call i7 @llvm.fshr.i7(i7 112, i7 127, i7 2)
   ret i7 %f
@@ -199,7 +197,7 @@ define i7 @fshr_i7_const_fold() {
 define i8 @fshr_i8_const_fold_overshift_1() {
 ; CHECK-LABEL: fshr_i8_const_fold_overshift_1:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    orr w0, wzr, #0xfe
+; CHECK-NEXT:    mov w0, #254
 ; CHECK-NEXT:    ret
   %f = call i8 @llvm.fshr.i8(i8 255, i8 0, i8 15)
   ret i8 %f
@@ -217,7 +215,7 @@ define i8 @fshr_i8_const_fold_overshift_2() {
 define i8 @fshr_i8_const_fold_overshift_3() {
 ; CHECK-LABEL: fshr_i8_const_fold_overshift_3:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    orr w0, wzr, #0xff
+; CHECK-NEXT:    mov w0, #255
 ; CHECK-NEXT:    ret
   %f = call i8 @llvm.fshr.i8(i8 0, i8 255, i8 8)
   ret i8 %f
@@ -261,7 +259,7 @@ define i64 @fshr_i64_const_overshift(i64 %x, i64 %y) {
 define i8 @fshr_i8_const_fold() {
 ; CHECK-LABEL: fshr_i8_const_fold:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    orr w0, wzr, #0xfe
+; CHECK-NEXT:    mov w0, #254
 ; CHECK-NEXT:    ret
   %f = call i8 @llvm.fshr.i8(i8 255, i8 0, i8 7)
   ret i8 %f

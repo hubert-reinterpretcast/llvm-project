@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_SBType_h_
-#define LLDB_SBType_h_
+#ifndef LLDB_API_SBTYPE_H
+#define LLDB_API_SBTYPE_H
 
 #include "lldb/API/SBDefines.h"
 
@@ -24,6 +24,8 @@ public:
   ~SBTypeMember();
 
   lldb::SBTypeMember &operator=(const lldb::SBTypeMember &rhs);
+
+  explicit operator bool() const;
 
   bool IsValid() const;
 
@@ -63,6 +65,8 @@ public:
   ~SBTypeMemberFunction();
 
   lldb::SBTypeMemberFunction &operator=(const lldb::SBTypeMemberFunction &rhs);
+
+  explicit operator bool() const;
 
   bool IsValid() const;
 
@@ -104,6 +108,8 @@ public:
   SBType(const lldb::SBType &rhs);
 
   ~SBType();
+
+  explicit operator bool() const;
 
   bool IsValid() const;
 
@@ -235,6 +241,8 @@ public:
 
   lldb::SBTypeList &operator=(const lldb::SBTypeList &rhs);
 
+  explicit operator bool() const;
+
   bool IsValid();
 
   void Append(lldb::SBType type);
@@ -251,4 +259,4 @@ private:
 
 } // namespace lldb
 
-#endif // LLDB_SBType_h_
+#endif // LLDB_API_SBTYPE_H

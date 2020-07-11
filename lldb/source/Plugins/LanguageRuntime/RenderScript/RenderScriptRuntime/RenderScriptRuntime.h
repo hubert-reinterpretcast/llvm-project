@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_RenderScriptRuntime_h_
-#define liblldb_RenderScriptRuntime_h_
+#ifndef LLDB_SOURCE_PLUGINS_LANGUAGERUNTIME_RENDERSCRIPT_RENDERSCRIPTRUNTIME_RENDERSCRIPTRUNTIME_H
+#define LLDB_SOURCE_PLUGINS_LANGUAGERUNTIME_RENDERSCRIPT_RENDERSCRIPTRUNTIME_RENDERSCRIPTRUNTIME_H
 
 #include <array>
 #include <map>
@@ -19,9 +19,14 @@
 #include "llvm/ADT/StringRef.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Expression/LLVMUserExpression.h"
-#include "lldb/Target/CPPLanguageRuntime.h"
 #include "lldb/Target/LanguageRuntime.h"
 #include "lldb/lldb-private.h"
+
+#include "Plugins/LanguageRuntime/CPlusPlus/CPPLanguageRuntime.h"
+
+namespace clang {
+class TargetOptions;
+}
 
 namespace lldb_private {
 namespace lldb_renderscript {
@@ -53,7 +58,7 @@ struct RSCoordinate {
 // for .expand kernels as a fallback.
 class RSBreakpointResolver : public BreakpointResolver {
 public:
-  RSBreakpointResolver(Breakpoint *bp, ConstString name)
+  RSBreakpointResolver(const lldb::BreakpointSP &bp, ConstString name)
       : BreakpointResolver(bp, BreakpointResolver::NameResolver),
         m_kernel_name(name) {}
 
@@ -66,15 +71,15 @@ public:
   void Dump(Stream *s) const override {}
 
   Searcher::CallbackReturn SearchCallback(SearchFilter &filter,
-                                          SymbolContext &context, Address *addr,
-                                          bool containing) override;
+                                          SymbolContext &context,
+                                          Address *addr) override;
 
   lldb::SearchDepth GetDepth() override { return lldb::eSearchDepthModule; }
 
   lldb::BreakpointResolverSP
-  CopyForBreakpoint(Breakpoint &breakpoint) override {
+  CopyForBreakpoint(lldb::BreakpointSP &breakpoint) override {
     lldb::BreakpointResolverSP ret_sp(
-        new RSBreakpointResolver(&breakpoint, m_kernel_name));
+        new RSBreakpointResolver(breakpoint, m_kernel_name));
     return ret_sp;
   }
 
@@ -95,7 +100,7 @@ public:
   };
 
   RSReduceBreakpointResolver(
-      Breakpoint *breakpoint, ConstString reduce_name,
+      const lldb::BreakpointSP &breakpoint, ConstString reduce_name,
       std::vector<lldb_renderscript::RSModuleDescriptorSP> *rs_modules,
       int kernel_types = eKernelTypeAll)
       : BreakpointResolver(breakpoint, BreakpointResolver::NameResolver),
@@ -116,15 +121,15 @@ public:
   void Dump(Stream *s) const override {}
 
   Searcher::CallbackReturn SearchCallback(SearchFilter &filter,
-                                          SymbolContext &context, Address *addr,
-                                          bool containing) override;
+                                          SymbolContext &context,
+                                          Address *addr) override;
 
   lldb::SearchDepth GetDepth() override { return lldb::eSearchDepthModule; }
 
   lldb::BreakpointResolverSP
-  CopyForBreakpoint(Breakpoint &breakpoint) override {
+  CopyForBreakpoint(lldb::BreakpointSP &breakpoint) override {
     lldb::BreakpointResolverSP ret_sp(new RSReduceBreakpointResolver(
-        &breakpoint, m_reduce_name, m_rsmodules, m_kernel_types));
+        breakpoint, m_reduce_name, m_rsmodules, m_kernel_types));
     return ret_sp;
   }
 
@@ -245,7 +250,8 @@ typedef std::vector<RSScriptGroupDescriptorSP> RSScriptGroupList;
 
 class RSScriptGroupBreakpointResolver : public BreakpointResolver {
 public:
-  RSScriptGroupBreakpointResolver(Breakpoint *bp, const ConstString &name,
+  RSScriptGroupBreakpointResolver(const lldb::BreakpointSP &bp,
+                                  ConstString name,
                                   const RSScriptGroupList &groups,
                                   bool stop_on_all)
       : BreakpointResolver(bp, BreakpointResolver::NameResolver),
@@ -261,21 +267,21 @@ public:
   void Dump(Stream *s) const override {}
 
   Searcher::CallbackReturn SearchCallback(SearchFilter &filter,
-                                          SymbolContext &context, Address *addr,
-                                          bool containing) override;
+                                          SymbolContext &context,
+                                          Address *addr) override;
 
   lldb::SearchDepth GetDepth() override { return lldb::eSearchDepthModule; }
 
   lldb::BreakpointResolverSP
-  CopyForBreakpoint(Breakpoint &breakpoint) override {
+  CopyForBreakpoint(lldb::BreakpointSP &breakpoint) override {
     lldb::BreakpointResolverSP ret_sp(new RSScriptGroupBreakpointResolver(
-        &breakpoint, m_group_name, m_script_groups, m_stop_on_all));
+        breakpoint, m_group_name, m_script_groups, m_stop_on_all));
     return ret_sp;
   }
 
 protected:
   const RSScriptGroupDescriptorSP
-  FindScriptGroup(const ConstString &name) const {
+  FindScriptGroup(ConstString name) const {
     for (auto sg : m_script_groups) {
       if (ConstString::Compare(sg->m_name, name) == 0)
         return sg;
@@ -301,9 +307,7 @@ public:
 
   ~RenderScriptRuntime() override;
 
-  //------------------------------------------------------------------
   // Static Functions
-  //------------------------------------------------------------------
   static void Initialize();
 
   static void Terminate();
@@ -316,14 +320,22 @@ public:
 
   static lldb_private::ConstString GetPluginNameStatic();
 
+  static char ID;
+
+  bool isA(const void *ClassID) const override {
+    return ClassID == &ID || CPPLanguageRuntime::isA(ClassID);
+  }
+
+  static bool classof(const LanguageRuntime *runtime) {
+    return runtime->isA(&ID);
+  }
+
   static bool IsRenderScriptModule(const lldb::ModuleSP &module_sp);
 
   static ModuleKind GetModuleKind(const lldb::ModuleSP &module_sp);
 
   static void ModulesDidLoad(const lldb::ProcessSP &process_sp,
                              const ModuleList &module_list);
-
-  bool IsVTableName(const char *name) override;
 
   bool GetDynamicTypeAndAddress(ValueObject &in_value,
                                 lldb::DynamicValueType use_dynamic,
@@ -336,9 +348,9 @@ public:
 
   bool CouldHaveDynamicValue(ValueObject &in_value) override;
 
-  lldb::BreakpointResolverSP CreateExceptionResolver(Breakpoint *bp,
-                                                     bool catch_bp,
-                                                     bool throw_bp) override;
+  lldb::BreakpointResolverSP
+  CreateExceptionResolver(const lldb::BreakpointSP &bp,
+                          bool catch_bp, bool throw_bp) override;
 
   bool LoadModule(const lldb::ModuleSP &module_sp);
 
@@ -365,7 +377,7 @@ public:
       int kernel_types = ~(0));
 
   bool PlaceBreakpointOnScriptGroup(lldb::TargetSP target, Stream &strm,
-                                    const ConstString &name, bool stop_on_all);
+                                    ConstString name, bool stop_on_all);
 
   void SetBreakAllKernels(bool do_break, lldb::TargetSP target);
 
@@ -387,7 +399,7 @@ public:
     return m_scriptGroups;
   };
 
-  bool IsKnownKernel(const ConstString &name) {
+  bool IsKnownKernel(ConstString name) {
     for (const auto &module : m_rsmodules)
       for (const auto &kernel : module->m_kernels)
         if (kernel.m_name == name)
@@ -395,9 +407,9 @@ public:
     return false;
   }
 
-  //------------------------------------------------------------------
+  bool GetOverrideExprOptions(clang::TargetOptions &prototype);
+
   // PluginInterface protocol
-  //------------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
@@ -416,7 +428,8 @@ protected:
 
   void InitSearchFilter(lldb::TargetSP target) {
     if (!m_filtersp)
-      m_filtersp.reset(new SearchFilterForUnconstrainedSearches(target));
+      m_filtersp =
+          std::make_shared<SearchFilterForUnconstrainedSearches>(target);
   }
 
   void FixupScriptDetails(lldb_renderscript::RSModuleDescriptorSP rsmodule_sp);
@@ -428,12 +441,12 @@ protected:
   bool EvalRSExpression(const char *expression, StackFrame *frame_ptr,
                         uint64_t *result);
 
-  lldb::BreakpointSP CreateScriptGroupBreakpoint(const ConstString &name,
+  lldb::BreakpointSP CreateScriptGroupBreakpoint(ConstString name,
                                                  bool multi);
 
-  lldb::BreakpointSP CreateKernelBreakpoint(const ConstString &name);
+  lldb::BreakpointSP CreateKernelBreakpoint(ConstString name);
 
-  lldb::BreakpointSP CreateReductionBreakpoint(const ConstString &name,
+  lldb::BreakpointSP CreateReductionBreakpoint(ConstString name,
                                                int kernel_types);
 
   void BreakOnModuleKernels(
@@ -572,11 +585,9 @@ private:
   // any previous stored allocation which has the same address.
   AllocationDetails *CreateAllocation(lldb::addr_t address);
 
-  bool GetOverrideExprOptions(clang::TargetOptions &prototype) override;
-
   bool GetIRPasses(LLVMUserExpression::IRPasses &passes) override;
 };
 
 } // namespace lldb_private
 
-#endif // liblldb_RenderScriptRuntime_h_
+#endif // LLDB_SOURCE_PLUGINS_LANGUAGERUNTIME_RENDERSCRIPT_RENDERSCRIPTRUNTIME_RENDERSCRIPTRUNTIME_H

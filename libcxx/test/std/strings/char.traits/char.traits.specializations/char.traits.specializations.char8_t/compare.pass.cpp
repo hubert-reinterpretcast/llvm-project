@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++03, c++11, c++14, c++17
 
 // <string>
 
@@ -51,6 +51,7 @@ int main(int, char**)
     assert(std::char_traits<char8_t>::compare(u8"124", u8"123", 3) > 0);
 
     static_assert(test_constexpr(), "" );
+    return 0;
 }
 #else
 int main(int, char**) {

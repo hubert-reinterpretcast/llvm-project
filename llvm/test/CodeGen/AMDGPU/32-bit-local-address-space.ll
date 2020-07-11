@@ -57,9 +57,9 @@ entry:
 }
 
 ; FUNC-LABEL: {{^}}null_32bit_lds_ptr:
-; SI: v_cmp_ne_u32
+; SI: s_cmp_lg_u32
 ; SI-NOT: v_cmp_ne_u32
-; SI: v_cndmask_b32
+; SI: s_cselect_b32
 define amdgpu_kernel void @null_32bit_lds_ptr(i32 addrspace(1)* %out, i32 addrspace(3)* %lds) nounwind {
   %cmp = icmp ne i32 addrspace(3)* %lds, null
   %x = select i1 %cmp, i32 123, i32 456
@@ -81,8 +81,8 @@ define amdgpu_kernel void @mul_32bit_ptr(float addrspace(1)* %out, [3 x float] a
 @g_lds = addrspace(3) global float undef, align 4
 
 ; FUNC-LABEL: {{^}}infer_ptr_alignment_global_offset:
-; SI: v_mov_b32_e32 [[REG:v[0-9]+]], 0
-; SI: ds_read_b32 v{{[0-9]+}}, [[REG]]
+; SI: v_mov_b32_e32 [[PTR:v[0-9]+]], g_lds@abs32@lo
+; SI: ds_read_b32 v{{[0-9]+}}, [[PTR]]
 define amdgpu_kernel void @infer_ptr_alignment_global_offset(float addrspace(1)* %out, i32 %tid) {
   %val = load float, float addrspace(3)* @g_lds
   store float %val, float addrspace(1)* %out

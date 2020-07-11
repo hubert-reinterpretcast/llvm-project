@@ -11,11 +11,10 @@
 // long double stold(const string& str, size_t *idx = 0);
 // long double stold(const wstring& str, size_t *idx = 0);
 
-#include <iostream>
-
-#include <string>
-#include <cmath>
 #include <cassert>
+#include <cmath>
+#include <stdexcept>
+#include <string>
 
 #include "test_macros.h"
 

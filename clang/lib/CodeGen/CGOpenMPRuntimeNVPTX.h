@@ -200,7 +200,7 @@ public:
   /// Emit call to void __kmpc_push_proc_bind(ident_t *loc, kmp_int32
   /// global_tid, int proc_bind) to generate code for 'proc_bind' clause.
   virtual void emitProcBindClause(CodeGenFunction &CGF,
-                                  OpenMPProcBindClauseKind ProcBind,
+                                  llvm::omp::ProcBindKind ProcBind,
                                   SourceLocation Loc) override;
 
   /// Emits call to void __kmpc_push_num_threads(ident_t *loc, kmp_int32
@@ -383,8 +383,16 @@ public:
 
   /// Perform check on requires decl to ensure that target architecture
   /// supports unified addressing
-  void checkArchForUnifiedAddressing(CodeGenModule &CGM,
-                                     const OMPRequiresDecl *D) const override;
+  void processRequiresDirective(const OMPRequiresDecl *D) override;
+
+  /// Returns default address space for the constant firstprivates, __constant__
+  /// address space by default.
+  unsigned getDefaultFirstprivateAddressSpace() const override;
+
+  /// Checks if the variable has associated OMPAllocateDeclAttr attribute with
+  /// the predefined allocator and translates it into the corresponding address
+  /// space.
+  bool hasAllocateAttributeForGlobalVar(const VarDecl *VD, LangAS &AS) override;
 
 private:
   /// Track the execution mode when codegening directives within a target

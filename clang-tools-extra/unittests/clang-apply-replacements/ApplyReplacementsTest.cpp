@@ -26,10 +26,10 @@ makeTUDiagnostics(const std::string &MainSourceFile, StringRef DiagnosticName,
   TUs.push_back({MainSourceFile,
                  {{DiagnosticName,
                    Message,
-                   Replacements,
                    {},
                    Diagnostic::Warning,
-                   BuildDirectory}}});
+                   BuildDirectory,
+                   {}}}});
   return TUs;
 }
 

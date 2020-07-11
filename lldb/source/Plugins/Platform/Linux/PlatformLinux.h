@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_PlatformLinux_h_
-#define liblldb_PlatformLinux_h_
+#ifndef LLDB_SOURCE_PLUGINS_PLATFORM_LINUX_PLATFORMLINUX_H
+#define LLDB_SOURCE_PLUGINS_PLATFORM_LINUX_PLATFORMLINUX_H
 
 #include "Plugins/Platform/POSIX/PlatformPOSIX.h"
 
@@ -24,9 +24,7 @@ public:
 
   static void Terminate();
 
-  //------------------------------------------------------------
   // lldb_private::PluginInterface functions
-  //------------------------------------------------------------
   static lldb::PlatformSP CreateInstance(bool force, const ArchSpec *arch);
 
   static ConstString GetPluginNameStatic(bool is_host);
@@ -37,9 +35,7 @@ public:
 
   uint32_t GetPluginVersion() override { return 1; }
 
-  //------------------------------------------------------------
   // lldb_private::Platform functions
-  //------------------------------------------------------------
   const char *GetDescription() override {
     return GetPluginDescriptionStatic(IsHost());
   }
@@ -64,10 +60,11 @@ public:
                                   lldb::addr_t offset) override;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(PlatformLinux);
+  PlatformLinux(const PlatformLinux &) = delete;
+  const PlatformLinux &operator=(const PlatformLinux &) = delete;
 };
 
 } // namespace platform_linux
 } // namespace lldb_private
 
-#endif // liblldb_PlatformLinux_h_
+#endif // LLDB_SOURCE_PLUGINS_PLATFORM_LINUX_PLATFORMLINUX_H

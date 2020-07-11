@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++03, c++11, c++14, c++17
 // <string>
 
 // template<> struct char_traits<char8_t>
@@ -32,6 +32,7 @@ int main(int, char**)
     assert(c == u8'a');
 
     static_assert(test_constexpr(), "");
+    return 0;
 }
 #else
 int main(int, char**) {

@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_Highlighter_h_
-#define liblldb_Highlighter_h_
+#ifndef LLDB_CORE_HIGHLIGHTER_H
+#define LLDB_CORE_HIGHLIGHTER_H
 
 #include <utility>
 #include <vector>
@@ -18,17 +18,13 @@
 
 namespace lldb_private {
 
-//----------------------------------------------------------------------
 /// Represents style that the highlighter should apply to the given source code.
 /// Stores information about how every kind of token should be annotated.
-//----------------------------------------------------------------------
 struct HighlightStyle {
 
-  //----------------------------------------------------------------------
   /// A pair of strings that should be placed around a certain token. Usually
   /// stores color codes in these strings (the suffix string is often used for
   /// resetting the terminal attributes back to normal).
-  //----------------------------------------------------------------------
   class ColorStyle {
     std::string m_prefix;
     std::string m_suffix;
@@ -47,8 +43,6 @@ struct HighlightStyle {
     void Apply(Stream &s, llvm::StringRef value) const;
 
     /// Sets the prefix and suffix strings.
-    /// @param prefix
-    /// @param suffix
     void Set(llvm::StringRef prefix, llvm::StringRef suffix);
   };
 
@@ -83,9 +77,7 @@ struct HighlightStyle {
   /// Matches '(' or ')'
   ColorStyle parentheses;
 
-  //-----------------------------------------------------------------------
   // C language specific options
-  //-----------------------------------------------------------------------
 
   /// Matches directives to a preprocessor (if the language has any).
   ColorStyle pp_directive;
@@ -94,20 +86,20 @@ struct HighlightStyle {
   static HighlightStyle MakeVimStyle();
 };
 
-//----------------------------------------------------------------------
 /// Annotates source code with color attributes.
-//----------------------------------------------------------------------
 class Highlighter {
 public:
   Highlighter() = default;
   virtual ~Highlighter() = default;
-  DISALLOW_COPY_AND_ASSIGN(Highlighter);
+  Highlighter(const Highlighter &) = delete;
+  const Highlighter &operator=(const Highlighter &) = delete;
 
   /// Returns a human readable name for the selected highlighter.
   virtual llvm::StringRef GetName() const = 0;
 
   /// Highlights the given line
   /// \param options
+  ///     The highlight options.
   /// \param line
   ///     The user supplied line that needs to be highlighted.
   /// \param cursor_pos
@@ -161,4 +153,4 @@ public:
 
 } // namespace lldb_private
 
-#endif // liblldb_Highlighter_h_
+#endif // LLDB_CORE_HIGHLIGHTER_H

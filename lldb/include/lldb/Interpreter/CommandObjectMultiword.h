@@ -6,17 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_CommandObjectMultiword_h_
-#define liblldb_CommandObjectMultiword_h_
+#ifndef LLDB_INTERPRETER_COMMANDOBJECTMULTIWORD_H
+#define LLDB_INTERPRETER_COMMANDOBJECTMULTIWORD_H
 
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Utility/CompletionRequest.h"
 
 namespace lldb_private {
 
-//-------------------------------------------------------------------------
 // CommandObjectMultiword
-//-------------------------------------------------------------------------
 
 class CommandObjectMultiword : public CommandObject {
   // These two want to iterate over the subcommand dictionary.
@@ -52,7 +50,7 @@ public:
 
   bool WantsRawCommandString() override { return false; }
 
-  int HandleCompletion(CompletionRequest &request) override;
+  void HandleCompletion(CompletionRequest &request) override;
 
   const char *GetRepeatCommand(Args &current_command_args,
                                uint32_t index) override;
@@ -114,11 +112,11 @@ public:
 
   Options *GetOptions() override;
 
-  int HandleCompletion(CompletionRequest &request) override;
+  void HandleCompletion(CompletionRequest &request) override;
 
-  int HandleArgumentCompletion(
-      CompletionRequest &request,
-      OptionElementVector &opt_element_vector) override;
+  void
+  HandleArgumentCompletion(CompletionRequest &request,
+                           OptionElementVector &opt_element_vector) override;
 
   const char *GetRepeatCommand(Args &current_command_args,
                                uint32_t index) override;
@@ -133,4 +131,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_CommandObjectMultiword_h_
+#endif // LLDB_INTERPRETER_COMMANDOBJECTMULTIWORD_H

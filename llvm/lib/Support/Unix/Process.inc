@@ -15,8 +15,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Config/config.h"
 #include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/Mutex.h"
-#include "llvm/Support/MutexGuard.h"
+#include <mutex>
 #if HAVE_FCNTL_H
 #include <fcntl.h>
 #endif
@@ -67,9 +66,15 @@ static std::pair<std::chrono::microseconds, std::chrono::microseconds> getRUsage
 #endif
 }
 
+Process::Pid Process::getProcessId() {
+  static_assert(sizeof(Pid) >= sizeof(pid_t),
+                "Process::Pid should be big enough to store pid_t");
+  return Pid(::getpid());
+}
+
 // On Cygwin, getpagesize() returns 64k(AllocationGranularity) and
 // offset in mmap(3) should be aligned to the AllocationGranularity.
-unsigned Process::getPageSize() {
+Expected<unsigned> Process::getPageSize() {
 #if defined(HAVE_GETPAGESIZE)
   static const int page_size = ::getpagesize();
 #elif defined(HAVE_SYSCONF)
@@ -77,6 +82,9 @@ unsigned Process::getPageSize() {
 #else
 #error Cannot get the page size on this machine
 #endif
+  if (page_size == -1)
+    return errorCodeToError(std::error_code(errno, std::generic_category()));
+
   return static_cast<unsigned>(page_size);
 }
 
@@ -278,7 +286,7 @@ bool Process::FileDescriptorIsDisplayed(int fd) {
 #endif
 }
 
-static unsigned getColumns(int FileID) {
+static unsigned getColumns() {
   // If COLUMNS is defined in the environment, wrap to that many columns.
   if (const char *ColumnsStr = std::getenv("COLUMNS")) {
     int Columns = std::atoi(ColumnsStr);
@@ -286,30 +294,23 @@ static unsigned getColumns(int FileID) {
       return Columns;
   }
 
-  unsigned Columns = 0;
-
-#if defined(HAVE_SYS_IOCTL_H) && defined(HAVE_TERMIOS_H)
-  // Try to determine the width of the terminal.
-  struct winsize ws;
-  if (ioctl(FileID, TIOCGWINSZ, &ws) == 0)
-    Columns = ws.ws_col;
-#endif
-
-  return Columns;
+  // We used to call ioctl TIOCGWINSZ to determine the width. It is considered
+  // unuseful.
+  return 0;
 }
 
 unsigned Process::StandardOutColumns() {
   if (!StandardOutIsDisplayed())
     return 0;
 
-  return getColumns(1);
+  return getColumns();
 }
 
 unsigned Process::StandardErrColumns() {
   if (!StandardErrIsDisplayed())
     return 0;
 
-  return getColumns(2);
+  return getColumns();
 }
 
 #ifdef HAVE_TERMINFO
@@ -323,13 +324,13 @@ extern "C" int tigetnum(char *capname);
 #endif
 
 #ifdef HAVE_TERMINFO
-static ManagedStatic<sys::Mutex> TermColorMutex;
+static ManagedStatic<std::mutex> TermColorMutex;
 #endif
 
 static bool terminalHasColors(int fd) {
 #ifdef HAVE_TERMINFO
   // First, acquire a global lock because these C routines are thread hostile.
-  MutexGuard G(*TermColorMutex);
+  std::lock_guard<std::mutex> G(*TermColorMutex);
 
   int errret = 0;
   if (setupterm(nullptr, fd, &errret) != 0)

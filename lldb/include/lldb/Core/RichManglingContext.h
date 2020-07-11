@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_RichManglingContext_h_
-#define liblldb_RichManglingContext_h_
+#ifndef LLDB_CORE_RICHMANGLINGCONTEXT_H
+#define LLDB_CORE_RICHMANGLINGCONTEXT_H
 
 #include "lldb/lldb-forward.h"
 #include "lldb/lldb-private.h"
@@ -33,11 +33,11 @@ public:
 
   /// Use the ItaniumPartialDemangler to obtain rich mangling information from
   /// the given mangled name.
-  bool FromItaniumName(const ConstString &mangled);
+  bool FromItaniumName(ConstString mangled);
 
   /// Use the legacy language parser implementation to obtain rich mangling
   /// information from the given demangled name.
-  bool FromCxxMethodName(const ConstString &demangled);
+  bool FromCxxMethodName(ConstString demangled);
 
   /// If this symbol describes a constructor or destructor.
   bool IsCtorOrDtor() const;

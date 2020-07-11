@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_GDBRemoteCommunicationServerLLGS_h_
-#define liblldb_GDBRemoteCommunicationServerLLGS_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATIONSERVERLLGS_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATIONSERVERLLGS_H
 
 #include <mutex>
 #include <unordered_map>
@@ -31,43 +31,35 @@ class GDBRemoteCommunicationServerLLGS
     : public GDBRemoteCommunicationServerCommon,
       public NativeProcessProtocol::NativeDelegate {
 public:
-  //------------------------------------------------------------------
   // Constructors and Destructors
-  //------------------------------------------------------------------
   GDBRemoteCommunicationServerLLGS(
       MainLoop &mainloop,
       const NativeProcessProtocol::Factory &process_factory);
 
   void SetLaunchInfo(const ProcessLaunchInfo &info);
 
-  //------------------------------------------------------------------
   /// Launch a process with the current launch settings.
   ///
   /// This method supports running an lldb-gdbserver or similar
   /// server in a situation where the startup code has been provided
   /// with all the information for a child process to be launched.
   ///
-  /// @return
+  /// \return
   ///     An Status object indicating the success or failure of the
   ///     launch.
-  //------------------------------------------------------------------
   Status LaunchProcess() override;
 
-  //------------------------------------------------------------------
   /// Attach to a process.
   ///
   /// This method supports attaching llgs to a process accessible via the
   /// configured Platform.
   ///
-  /// @return
+  /// \return
   ///     An Status object indicating the success or failure of the
   ///     attach operation.
-  //------------------------------------------------------------------
   Status AttachToProcess(lldb::pid_t pid);
 
-  //------------------------------------------------------------------
   // NativeProcessProtocol::NativeDelegate overrides
-  //------------------------------------------------------------------
   void InitializeDelegate(NativeProcessProtocol *process) override;
 
   void ProcessStateChanged(NativeProcessProtocol *process,
@@ -75,7 +67,7 @@ public:
 
   void DidExec(NativeProcessProtocol *process) override;
 
-  Status InitializeConnection(std::unique_ptr<Connection> &&connection);
+  Status InitializeConnection(std::unique_ptr<Connection> connection);
 
 protected:
   MainLoop &m_mainloop;
@@ -90,7 +82,7 @@ protected:
   MainLoop::ReadHandleUP m_stdio_handle_up;
 
   lldb::StateType m_inferior_prev_state = lldb::StateType::eStateInvalid;
-  std::unique_ptr<llvm::MemoryBuffer> m_active_auxv_buffer_up;
+  llvm::StringMap<std::unique_ptr<llvm::MemoryBuffer>> m_xfer_buffer_map;
   std::mutex m_saved_registers_mutex;
   std::unordered_map<uint32_t, lldb::DataBufferSP> m_saved_registers_map;
   uint32_t m_next_saved_registers_id = 1;
@@ -158,7 +150,7 @@ protected:
 
   PacketResult Handle_s(StringExtractorGDBRemote &packet);
 
-  PacketResult Handle_qXfer_auxv_read(StringExtractorGDBRemote &packet);
+  PacketResult Handle_qXfer(StringExtractorGDBRemote &packet);
 
   PacketResult Handle_QSaveRegisterState(StringExtractorGDBRemote &packet);
 
@@ -186,6 +178,8 @@ protected:
 
   PacketResult Handle_QPassSignals(StringExtractorGDBRemote &packet);
 
+  PacketResult Handle_g(StringExtractorGDBRemote &packet);
+
   void SetCurrentThreadID(lldb::tid_t tid);
 
   lldb::tid_t GetCurrentThreadID() const;
@@ -199,7 +193,14 @@ protected:
   FileSpec FindModuleFile(const std::string &module_path,
                           const ArchSpec &arch) override;
 
+  llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>>
+  ReadXferObject(llvm::StringRef object, llvm::StringRef annex);
+
+  static std::string XMLEncodeAttributeValue(llvm::StringRef value);
+
 private:
+  llvm::Expected<std::unique_ptr<llvm::MemoryBuffer>> BuildTargetXml();
+
   void HandleInferiorState_Exited(NativeProcessProtocol *process);
 
   void HandleInferiorState_Stopped(NativeProcessProtocol *process);
@@ -222,13 +223,14 @@ private:
 
   void StopSTDIOForwarding();
 
-  //------------------------------------------------------------------
   // For GDBRemoteCommunicationServerLLGS only
-  //------------------------------------------------------------------
-  DISALLOW_COPY_AND_ASSIGN(GDBRemoteCommunicationServerLLGS);
+  GDBRemoteCommunicationServerLLGS(const GDBRemoteCommunicationServerLLGS &) =
+      delete;
+  const GDBRemoteCommunicationServerLLGS &
+  operator=(const GDBRemoteCommunicationServerLLGS &) = delete;
 };
 
 } // namespace process_gdb_remote
 } // namespace lldb_private
 
-#endif // liblldb_GDBRemoteCommunicationServerLLGS_h_
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_GDB_REMOTE_GDBREMOTECOMMUNICATIONSERVERLLGS_H

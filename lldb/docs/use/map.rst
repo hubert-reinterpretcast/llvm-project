@@ -51,6 +51,8 @@ Execution Commands
                <td class="content">
                   <b>(lldb)</b> process launch -- &lt;args&gt;
                   <br>
+                  <b>(lldb)</b> run &lt;args&gt;
+                  <br>
                   <b>(lldb)</b> r &lt;args&gt;
                </td>
          </tr>
@@ -108,7 +110,7 @@ Execution Commands
          </tr>
 
          <tr>
-               <td class="header" colspan="2">Launch a process with arguments in new terminal window (Mac OS X only).</td>
+               <td class="header" colspan="2">Launch a process with arguments in new terminal window (macOS only).</td>
          </tr>
          <tr>
                <td class="content">
@@ -123,7 +125,7 @@ Execution Commands
 
          <tr>
                <td class="header" colspan="2">Launch a process with arguments in existing terminal
-                  <cope>/dev/ttys006 (Mac OS X only).</cope>
+                  <cope>/dev/ttys006 (macOS only).</cope>
                </td>
          </tr>
          <tr>
@@ -607,6 +609,38 @@ Breakpoint Commands
                </td>
          </tr>
 
+         <tr>
+               <td class="header" colspan="2">Disable a breakpoint.</td>
+         </tr>
+         <tr>
+               <td class="content">
+                  <b>(gdb)</b> disable 1
+                  <br>
+               </td>
+               <td class="content">
+                  <b>(lldb)</b> breakpoint disable 1
+                  <br>
+                  <b>(lldb)</b> br dis 1
+                  <br>
+               </td>
+         </tr>
+
+         <tr>
+               <td class="header" colspan="2">Enable a breakpoint.</td>
+         </tr>
+         <tr>
+               <td class="content">
+                  <b>(gdb)</b> enable 1
+                  <br>
+               </td>
+               <td class="content">
+                  <b>(lldb)</b> breakpoint enable 1
+                  <br>
+                  <b>(lldb)</b> br en 1
+                  <br>
+               </td>
+         </tr>
+
       </tbody>
    </table>
 
@@ -874,6 +908,20 @@ Examining Variables
                   <b>(lldb)</b> target stop-hook add --classname MyClass --one-liner "frame variable *this"
                   <br>
                   <b>(lldb)</b> ta st a -c MyClass -o "fr v *this"
+                  <br>
+               </td>
+         </tr>
+
+         <tr>
+               <td class="header" colspan="2">Print an array of integers in memory, assuming we have a pointer like "int *ptr".</td>
+         </tr>
+         <tr>
+               <td class="content">
+                  <b>(gdb)</b> p *ptr@10
+                  <br>
+               </td>
+               <td class="content">
+                  <b>(lldb)</b> parray 10 ptr
                   <br>
                </td>
          </tr>
@@ -1383,7 +1431,7 @@ Examining Thread State
                </td>
          </tr>
          <tr>
-               <td class="header" colspan="2">Get information about a specific heap allocation (available on Mac OS X only).</td>
+               <td class="header" colspan="2">Get information about a specific heap allocation (available on macOS only).</td>
          </tr>
          <tr>
                <td class="content">
@@ -1399,7 +1447,7 @@ Examining Thread State
                </td>
          </tr>
          <tr>
-               <td class="header" colspan="2">Get information about a specific heap allocation and cast the result to any dynamic type that can be deduced (available on Mac OS X only)</td>
+               <td class="header" colspan="2">Get information about a specific heap allocation and cast the result to any dynamic type that can be deduced (available on macOS only)</td>
          </tr>
          <tr>
                <td class="content">
@@ -1412,7 +1460,7 @@ Examining Thread State
                </td>
          </tr>
          <tr>
-               <td class="header" colspan="2">Find all heap blocks that contain a pointer specified by an expression EXPR (available on Mac OS X only).</td>
+               <td class="header" colspan="2">Find all heap blocks that contain a pointer specified by an expression EXPR (available on macOS only).</td>
          </tr>
          <tr>
                <td class="content">
@@ -1425,7 +1473,7 @@ Examining Thread State
                </td>
          </tr>
          <tr>
-               <td class="header" colspan="2">Find all heap blocks that contain a C string anywhere in the block (available on Mac OS X only).</td>
+               <td class="header" colspan="2">Find all heap blocks that contain a C string anywhere in the block (available on macOS only).</td>
          </tr>
          <tr>
                <td class="content">

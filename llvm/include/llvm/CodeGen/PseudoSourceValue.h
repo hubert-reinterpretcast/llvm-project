@@ -14,20 +14,19 @@
 #define LLVM_CODEGEN_PSEUDOSOURCEVALUE_H
 
 #include "llvm/ADT/StringMap.h"
-#include "llvm/IR/GlobalValue.h"
-#include "llvm/IR/Value.h"
 #include "llvm/IR/ValueMap.h"
 #include <map>
 
 namespace llvm {
 
+class GlobalValue;
 class MachineFrameInfo;
 class MachineMemOperand;
+class MIRFormatter;
+class PseudoSourceValue;
 class raw_ostream;
 class TargetInstrInfo;
 
-raw_ostream &operator<<(raw_ostream &OS, const MachineMemOperand &MMO);
-class PseudoSourceValue;
 raw_ostream &operator<<(raw_ostream &OS, const PseudoSourceValue* PSV);
 
 /// Special value supplied for machine level alias analysis. It indicates that
@@ -53,6 +52,7 @@ private:
                                        const PseudoSourceValue* PSV);
 
   friend class MachineMemOperand; // For printCustom().
+  friend class MIRFormatter;      // For printCustom().
 
   /// Implement printing for PseudoSourceValue. This is called from
   /// Value::print or Value's operator<<.
@@ -123,7 +123,7 @@ public:
   bool mayAlias(const MachineFrameInfo *) const override;
 };
 
-/// A specialized pseudo soruce value for holding GlobalValue values.
+/// A specialized pseudo source value for holding GlobalValue values.
 class GlobalValuePseudoSourceValue : public CallEntryPseudoSourceValue {
   const GlobalValue *GV;
 

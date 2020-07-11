@@ -148,11 +148,9 @@ body: |
     liveins: $w0
     ; CHECK-LABEL: name: test_sitofp_s32_s1
     ; CHECK: [[COPY:%[0-9]+]]:_(s32) = COPY $w0
-    ; CHECK: [[C:%[0-9]+]]:_(s32) = G_CONSTANT i32 31
     ; CHECK: [[COPY1:%[0-9]+]]:_(s32) = COPY [[COPY]](s32)
-    ; CHECK: [[SHL:%[0-9]+]]:_(s32) = G_SHL [[COPY1]], [[C]](s32)
-    ; CHECK: [[ASHR:%[0-9]+]]:_(s32) = G_ASHR [[SHL]], [[C]](s32)
-    ; CHECK: [[SITOFP:%[0-9]+]]:_(s32) = G_SITOFP [[ASHR]](s32)
+    ; CHECK: [[SEXT_INREG:%[0-9]+]]:_(s32) = G_SEXT_INREG [[COPY1]], 1
+    ; CHECK: [[SITOFP:%[0-9]+]]:_(s32) = G_SITOFP [[SEXT_INREG]](s32)
     ; CHECK: $w0 = COPY [[SITOFP]](s32)
     %0:_(s32) = COPY $w0
     %1:_(s1) = G_TRUNC %0
@@ -185,11 +183,9 @@ body: |
     liveins: $w0
     ; CHECK-LABEL: name: test_sitofp_s64_s8
     ; CHECK: [[COPY:%[0-9]+]]:_(s32) = COPY $w0
-    ; CHECK: [[C:%[0-9]+]]:_(s32) = G_CONSTANT i32 24
     ; CHECK: [[COPY1:%[0-9]+]]:_(s32) = COPY [[COPY]](s32)
-    ; CHECK: [[SHL:%[0-9]+]]:_(s32) = G_SHL [[COPY1]], [[C]](s32)
-    ; CHECK: [[ASHR:%[0-9]+]]:_(s32) = G_ASHR [[SHL]], [[C]](s32)
-    ; CHECK: [[SITOFP:%[0-9]+]]:_(s64) = G_SITOFP [[ASHR]](s32)
+    ; CHECK: [[SEXT_INREG:%[0-9]+]]:_(s32) = G_SEXT_INREG [[COPY1]], 8
+    ; CHECK: [[SITOFP:%[0-9]+]]:_(s64) = G_SITOFP [[SEXT_INREG]](s32)
     ; CHECK: $x0 = COPY [[SITOFP]](s64)
     %0:_(s32) = COPY $w0
     %1:_(s8) = G_TRUNC %0
@@ -250,11 +246,9 @@ body: |
     liveins: $w0
     ; CHECK-LABEL: name: test_sitofp_s32_s16
     ; CHECK: [[COPY:%[0-9]+]]:_(s32) = COPY $w0
-    ; CHECK: [[C:%[0-9]+]]:_(s32) = G_CONSTANT i32 16
     ; CHECK: [[COPY1:%[0-9]+]]:_(s32) = COPY [[COPY]](s32)
-    ; CHECK: [[SHL:%[0-9]+]]:_(s32) = G_SHL [[COPY1]], [[C]](s32)
-    ; CHECK: [[ASHR:%[0-9]+]]:_(s32) = G_ASHR [[SHL]], [[C]](s32)
-    ; CHECK: [[SITOFP:%[0-9]+]]:_(s32) = G_SITOFP [[ASHR]](s32)
+    ; CHECK: [[SEXT_INREG:%[0-9]+]]:_(s32) = G_SEXT_INREG [[COPY1]], 16
+    ; CHECK: [[SITOFP:%[0-9]+]]:_(s32) = G_SITOFP [[SEXT_INREG]](s32)
     ; CHECK: $w0 = COPY [[SITOFP]](s32)
     %0:_(s32) = COPY $w0
     %1:_(s16) = G_TRUNC %0

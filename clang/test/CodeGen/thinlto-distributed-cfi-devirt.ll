@@ -8,6 +8,7 @@
 
 ; FIXME: Fix machine verifier issues and remove -verify-machineinstrs=0. PR39436.
 ; RUN: llvm-lto2 run -thinlto-distributed-indexes %t.o \
+; RUN:   -whole-program-visibility \
 ; RUN:   -verify-machineinstrs=0 \
 ; RUN:   -o %t2.index \
 ; RUN:   -r=%t.o,test,px \
@@ -35,19 +36,19 @@
 ; Round trip it through llvm-as
 ; RUN: llvm-dis %t.o.thinlto.bc -o - | llvm-as -o - | llvm-dis -o - | FileCheck %s --check-prefix=CHECK-DIS
 ; CHECK-DIS: ^0 = module: (path: "{{.*}}thinlto-distributed-cfi-devirt.ll.tmp.o", hash: ({{.*}}, {{.*}}, {{.*}}, {{.*}}, {{.*}}))
-; CHECK-DIS: ^1 = gv: (guid: 8346051122425466633, summaries: (function: (module: ^0, flags: (linkage: external, notEligibleToImport: 0, live: 1, dsoLocal: 0), insts: 18, typeIdInfo: (typeTests: (^2), typeCheckedLoadVCalls: (vFuncId: (^2, offset: 8), vFuncId: (^2, offset: 0))))))
+; CHECK-DIS: ^1 = gv: (guid: 8346051122425466633, summaries: (function: (module: ^0, flags: (linkage: external, notEligibleToImport: 0, live: 1, dsoLocal: 0, canAutoHide: 0), insts: 18, typeIdInfo: (typeTests: (^2), typeCheckedLoadVCalls: (vFuncId: (^2, offset: 8), vFuncId: (^2, offset: 0))))))
 ; CHECK-DIS: ^2 = typeid: (name: "_ZTS1A", summary: (typeTestRes: (kind: allOnes, sizeM1BitWidth: 7), wpdResolutions: ((offset: 0, wpdRes: (kind: branchFunnel)), (offset: 8, wpdRes: (kind: singleImpl, singleImplName: "_ZN1A1nEi"))))) ; guid = 7004155349499253778
 
 ; RUN: %clang_cc1 -triple x86_64-grtev4-linux-gnu \
-; RUN:   -emit-obj -fthinlto-index=%t.o.thinlto.bc \
+; RUN:   -emit-obj -fthinlto-index=%t.o.thinlto.bc -O2 \
 ; RUN:   -emit-llvm -o - -x ir %t.o | FileCheck %s --check-prefixes=CHECK-IR
 
 ; Check that backend does not fail generating native code.
 ; RUN: %clang_cc1 -triple x86_64-grtev4-linux-gnu \
-; RUN:   -emit-obj -fthinlto-index=%t.o.thinlto.bc \
+; RUN:   -emit-obj -fthinlto-index=%t.o.thinlto.bc -O2 \
 ; RUN:   -o %t.native.o -x ir %t.o
 
-target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-grtev4-linux-gnu"
 
 %struct.A = type { i32 (...)** }
@@ -92,7 +93,7 @@ cont2:
   ; CHECK-IR: br i1 {{.*}}, label %trap
 
   ; We still have to call it as virtual.
-  ; CHECK-IR: %call3 = tail call i32 %8
+  ; CHECK-IR: %call3 = tail call i32 %7
   %call3 = tail call i32 %8(%struct.A* nonnull %obj, i32 %call)
   ret i32 %call3
 }

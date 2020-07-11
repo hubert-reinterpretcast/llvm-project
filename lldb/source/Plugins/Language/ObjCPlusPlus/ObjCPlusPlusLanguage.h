@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_ObjCPlusPlusLanguage_h_
-#define liblldb_ObjCPlusPlusLanguage_h_
+#ifndef LLDB_SOURCE_PLUGINS_LANGUAGE_OBJCPLUSPLUS_OBJCPLUSPLUSLANGUAGE_H
+#define LLDB_SOURCE_PLUGINS_LANGUAGE_OBJCPLUSPLUS_OBJCPLUSPLUSLANGUAGE_H
 
 #include "Plugins/Language/ClangCommon/ClangHighlighter.h"
 #include "lldb/Target/Language.h"
@@ -31,9 +31,7 @@ public:
 
   const Highlighter *GetHighlighter() const override { return &m_highlighter; }
 
-  //------------------------------------------------------------------
   // Static Functions
-  //------------------------------------------------------------------
   static void Initialize();
 
   static void Terminate();
@@ -42,9 +40,7 @@ public:
 
   static lldb_private::ConstString GetPluginNameStatic();
 
-  //------------------------------------------------------------------
   // PluginInterface protocol
-  //------------------------------------------------------------------
   ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
@@ -52,4 +48,4 @@ public:
 
 } // namespace lldb_private
 
-#endif // liblldb_CPlusPlusLanguage_h_
+#endif // LLDB_SOURCE_PLUGINS_LANGUAGE_OBJCPLUSPLUS_OBJCPLUSPLUSLANGUAGE_H

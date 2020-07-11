@@ -1,4 +1,4 @@
-//===--- SimplifyBooleanExpr.cpp clang-tidy ---------------------*- C++ -*-===//
+//===-- SimplifyBooleanExprCheck.cpp - clang-tidy -------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -44,7 +44,7 @@ const char IfAssignVariableId[] = "if-assign-lvalue";
 const char IfAssignLocId[] = "if-assign-loc";
 const char IfAssignBoolId[] = "if-assign";
 const char IfAssignNotBoolId[] = "if-assign-not";
-const char IfAssignObjId[] = "if-assign-obj";
+const char IfAssignVarId[] = "if-assign-var";
 const char CompoundReturnId[] = "compound-return";
 const char CompoundBoolId[] = "compound-bool";
 const char CompoundNotBoolId[] = "compound-bool-not";
@@ -131,7 +131,7 @@ std::string asBool(StringRef text, bool NeedsStaticCast) {
   if (NeedsStaticCast)
     return ("static_cast<bool>(" + text + ")").str();
 
-  return text;
+  return std::string(text);
 }
 
 bool needsNullPtrComparison(const Expr *E) {
@@ -333,13 +333,12 @@ class SimplifyBooleanExprCheck::Visitor : public RecursiveASTVisitor<Visitor> {
   const MatchFinder::MatchResult &Result;
 };
 
-
 SimplifyBooleanExprCheck::SimplifyBooleanExprCheck(StringRef Name,
                                                    ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
-      ChainedConditionalReturn(Options.get("ChainedConditionalReturn", 0U)),
+      ChainedConditionalReturn(Options.get("ChainedConditionalReturn", false)),
       ChainedConditionalAssignment(
-          Options.get("ChainedConditionalAssignment", 0U)) {}
+          Options.get("ChainedConditionalAssignment", false)) {}
 
 bool containsBoolLiteral(const Expr *E) {
   if (!E)
@@ -360,7 +359,7 @@ void SimplifyBooleanExprCheck::reportBinOp(
   const auto *LHS = Op->getLHS()->IgnoreParenImpCasts();
   const auto *RHS = Op->getRHS()->IgnoreParenImpCasts();
 
-  const CXXBoolLiteralExpr *Bool = nullptr;
+  const CXXBoolLiteralExpr *Bool;
   const Expr *Other = nullptr;
   if ((Bool = dyn_cast<CXXBoolLiteralExpr>(LHS)))
     Other = RHS;
@@ -423,7 +422,7 @@ void SimplifyBooleanExprCheck::matchBoolCondition(MatchFinder *Finder,
                                                   bool Value,
                                                   StringRef BooleanId) {
   Finder->addMatcher(
-      ifStmt(isExpansionInMainFile(),
+      ifStmt(unless(isInTemplateInstantiation()),
              hasCondition(cxxBoolLiteral(equals(Value)).bind(BooleanId)))
           .bind(IfStmtId),
       this);
@@ -433,7 +432,7 @@ void SimplifyBooleanExprCheck::matchTernaryResult(MatchFinder *Finder,
                                                   bool Value,
                                                   StringRef TernaryId) {
   Finder->addMatcher(
-      conditionalOperator(isExpansionInMainFile(),
+      conditionalOperator(unless(isInTemplateInstantiation()),
                           hasTrueExpression(cxxBoolLiteral(equals(Value))),
                           hasFalseExpression(cxxBoolLiteral(equals(!Value))))
           .bind(TernaryId),
@@ -443,13 +442,13 @@ void SimplifyBooleanExprCheck::matchTernaryResult(MatchFinder *Finder,
 void SimplifyBooleanExprCheck::matchIfReturnsBool(MatchFinder *Finder,
                                                   bool Value, StringRef Id) {
   if (ChainedConditionalReturn)
-    Finder->addMatcher(ifStmt(isExpansionInMainFile(),
+    Finder->addMatcher(ifStmt(unless(isInTemplateInstantiation()),
                               hasThen(returnsBool(Value, ThenLiteralId)),
                               hasElse(returnsBool(!Value)))
                            .bind(Id),
                        this);
   else
-    Finder->addMatcher(ifStmt(isExpansionInMainFile(),
+    Finder->addMatcher(ifStmt(unless(isInTemplateInstantiation()),
                               unless(hasParent(ifStmt())),
                               hasThen(returnsBool(Value, ThenLiteralId)),
                               hasElse(returnsBool(!Value)))
@@ -459,25 +458,28 @@ void SimplifyBooleanExprCheck::matchIfReturnsBool(MatchFinder *Finder,
 
 void SimplifyBooleanExprCheck::matchIfAssignsBool(MatchFinder *Finder,
                                                   bool Value, StringRef Id) {
-  auto SimpleThen = binaryOperator(
-      hasOperatorName("="),
-      hasLHS(declRefExpr(hasDeclaration(decl().bind(IfAssignObjId)))),
-      hasLHS(expr().bind(IfAssignVariableId)),
-      hasRHS(cxxBoolLiteral(equals(Value)).bind(IfAssignLocId)));
+  auto VarAssign = declRefExpr(hasDeclaration(decl().bind(IfAssignVarId)));
+  auto VarRef = declRefExpr(hasDeclaration(equalsBoundNode(IfAssignVarId)));
+  auto MemAssign = memberExpr(hasDeclaration(decl().bind(IfAssignVarId)));
+  auto MemRef = memberExpr(hasDeclaration(equalsBoundNode(IfAssignVarId)));
+  auto SimpleThen =
+      binaryOperator(hasOperatorName("="), hasLHS(anyOf(VarAssign, MemAssign)),
+                     hasLHS(expr().bind(IfAssignVariableId)),
+                     hasRHS(cxxBoolLiteral(equals(Value)).bind(IfAssignLocId)));
   auto Then = anyOf(SimpleThen, compoundStmt(statementCountIs(1),
                                              hasAnySubstatement(SimpleThen)));
-  auto SimpleElse = binaryOperator(
-      hasOperatorName("="),
-      hasLHS(declRefExpr(hasDeclaration(equalsBoundNode(IfAssignObjId)))),
-      hasRHS(cxxBoolLiteral(equals(!Value))));
+  auto SimpleElse =
+      binaryOperator(hasOperatorName("="), hasLHS(anyOf(VarRef, MemRef)),
+                     hasRHS(cxxBoolLiteral(equals(!Value))));
   auto Else = anyOf(SimpleElse, compoundStmt(statementCountIs(1),
                                              hasAnySubstatement(SimpleElse)));
   if (ChainedConditionalAssignment)
-    Finder->addMatcher(
-        ifStmt(isExpansionInMainFile(), hasThen(Then), hasElse(Else)).bind(Id),
-        this);
+    Finder->addMatcher(ifStmt(unless(isInTemplateInstantiation()),
+                              hasThen(Then), hasElse(Else))
+                           .bind(Id),
+                       this);
   else
-    Finder->addMatcher(ifStmt(isExpansionInMainFile(),
+    Finder->addMatcher(ifStmt(unless(isInTemplateInstantiation()),
                               unless(hasParent(ifStmt())), hasThen(Then),
                               hasElse(Else))
                            .bind(Id),
@@ -489,6 +491,7 @@ void SimplifyBooleanExprCheck::matchCompoundIfReturnsBool(MatchFinder *Finder,
                                                           StringRef Id) {
   Finder->addMatcher(
       compoundStmt(
+          unless(isInTemplateInstantiation()),
           hasAnySubstatement(
               ifStmt(hasThen(returnsBool(Value)), unless(hasElse(stmt())))),
           hasAnySubstatement(returnStmt(has(ignoringParenImpCasts(

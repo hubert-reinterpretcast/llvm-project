@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_SBInstruction_h_
-#define LLDB_SBInstruction_h_
+#ifndef LLDB_API_SBINSTRUCTION_H
+#define LLDB_API_SBINSTRUCTION_H
 
 #include "lldb/API/SBData.h"
 #include "lldb/API/SBDefines.h"
@@ -31,6 +31,8 @@ public:
 
   ~SBInstruction();
 
+  explicit operator bool() const;
+
   bool IsValid();
 
   SBAddress GetAddress();
@@ -52,6 +54,10 @@ public:
   bool CanSetBreakpoint();
 
   void Print(FILE *out);
+
+  void Print(SBFile out);
+
+  void Print(FileSP out);
 
   bool GetDescription(lldb::SBStream &description);
 
@@ -80,4 +86,4 @@ private:
 
 } // namespace lldb
 
-#endif // LLDB_SBInstruction_h_
+#endif // LLDB_API_SBINSTRUCTION_H

@@ -11,13 +11,16 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Analysis/VectorUtils.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
-
 using namespace llvm;
+
+#define DEBUG_TYPE "moduleutils"
 
 static void appendToGlobalArray(const char *Array, Module &M, Function *F,
                                 int Priority, Constant *Data) {
@@ -27,44 +30,24 @@ static void appendToGlobalArray(const char *Array, Module &M, Function *F,
   // Get the current set of static global constructors and add the new ctor
   // to the list.
   SmallVector<Constant *, 16> CurrentCtors;
-  StructType *EltTy;
+  StructType *EltTy = StructType::get(
+      IRB.getInt32Ty(), PointerType::getUnqual(FnTy), IRB.getInt8PtrTy());
   if (GlobalVariable *GVCtor = M.getNamedGlobal(Array)) {
-    ArrayType *ATy = cast<ArrayType>(GVCtor->getValueType());
-    StructType *OldEltTy = cast<StructType>(ATy->getElementType());
-    // Upgrade a 2-field global array type to the new 3-field format if needed.
-    if (Data && OldEltTy->getNumElements() < 3)
-      EltTy = StructType::get(IRB.getInt32Ty(), PointerType::getUnqual(FnTy),
-                              IRB.getInt8PtrTy());
-    else
-      EltTy = OldEltTy;
     if (Constant *Init = GVCtor->getInitializer()) {
       unsigned n = Init->getNumOperands();
       CurrentCtors.reserve(n + 1);
-      for (unsigned i = 0; i != n; ++i) {
-        auto Ctor = cast<Constant>(Init->getOperand(i));
-        if (EltTy != OldEltTy)
-          Ctor =
-              ConstantStruct::get(EltTy, Ctor->getAggregateElement((unsigned)0),
-                                  Ctor->getAggregateElement(1),
-                                  Constant::getNullValue(IRB.getInt8PtrTy()));
-        CurrentCtors.push_back(Ctor);
-      }
+      for (unsigned i = 0; i != n; ++i)
+        CurrentCtors.push_back(cast<Constant>(Init->getOperand(i)));
     }
     GVCtor->eraseFromParent();
-  } else {
-    // Use the new three-field struct if there isn't one already.
-    EltTy = StructType::get(IRB.getInt32Ty(), PointerType::getUnqual(FnTy),
-                            IRB.getInt8PtrTy());
   }
 
-  // Build a 2 or 3 field global_ctor entry.  We don't take a comdat key.
+  // Build a 3 field global_ctor entry.  We don't take a comdat key.
   Constant *CSVals[3];
   CSVals[0] = IRB.getInt32(Priority);
   CSVals[1] = F;
-  // FIXME: Drop support for the two element form in LLVM 4.0.
-  if (EltTy->getNumElements() >= 3)
-    CSVals[2] = Data ? ConstantExpr::getPointerCast(Data, IRB.getInt8PtrTy())
-                     : Constant::getNullValue(IRB.getInt8PtrTy());
+  CSVals[2] = Data ? ConstantExpr::getPointerCast(Data, IRB.getInt8PtrTy())
+                   : Constant::getNullValue(IRB.getInt8PtrTy());
   Constant *RuntimeCtorInit =
       ConstantStruct::get(EltTy, makeArrayRef(CSVals, EltTy->getNumElements()));
 
@@ -93,7 +76,7 @@ static void appendToUsedList(Module &M, StringRef Name, ArrayRef<GlobalValue *> 
   SmallPtrSet<Constant *, 16> InitAsSet;
   SmallVector<Constant *, 16> Init;
   if (GV) {
-    ConstantArray *CA = dyn_cast<ConstantArray>(GV->getInitializer());
+    auto *CA = cast<ConstantArray>(GV->getInitializer());
     for (auto &Op : CA->operands()) {
       Constant *C = cast_or_null<Constant>(Op);
       if (InitAsSet.insert(C).second)
@@ -136,6 +119,15 @@ llvm::declareSanitizerInitFunction(Module &M, StringRef InitName,
       AttributeList());
 }
 
+Function *llvm::createSanitizerCtor(Module &M, StringRef CtorName) {
+  Function *Ctor = Function::Create(
+      FunctionType::get(Type::getVoidTy(M.getContext()), false),
+      GlobalValue::InternalLinkage, CtorName, &M);
+  BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
+  ReturnInst::Create(M.getContext(), CtorBB);
+  return Ctor;
+}
+
 std::pair<Function *, FunctionCallee> llvm::createSanitizerCtorAndInitFunctions(
     Module &M, StringRef CtorName, StringRef InitName,
     ArrayRef<Type *> InitArgTypes, ArrayRef<Value *> InitArgs,
@@ -145,11 +137,8 @@ std::pair<Function *, FunctionCallee> llvm::createSanitizerCtorAndInitFunctions(
          "Sanitizer's init function expects different number of arguments");
   FunctionCallee InitFunction =
       declareSanitizerInitFunction(M, InitName, InitArgTypes);
-  Function *Ctor = Function::Create(
-      FunctionType::get(Type::getVoidTy(M.getContext()), false),
-      GlobalValue::InternalLinkage, CtorName, &M);
-  BasicBlock *CtorBB = BasicBlock::Create(M.getContext(), "", Ctor);
-  IRBuilder<> IRB(ReturnInst::Create(M.getContext(), CtorBB));
+  Function *Ctor = createSanitizerCtor(M, CtorName);
+  IRBuilder<> IRB(Ctor->getEntryBlock().getTerminator());
   IRB.CreateCall(InitFunction, InitArgs);
   if (!VersionCheckName.empty()) {
     FunctionCallee VersionCheckFunction = M.getOrInsertFunction(
@@ -299,4 +288,33 @@ std::string llvm::getUniqueModuleId(Module *M) {
   SmallString<32> Str;
   MD5::stringifyResult(R, Str);
   return ("$" + Str).str();
+}
+
+void VFABI::setVectorVariantNames(
+    CallInst *CI, const SmallVector<std::string, 8> &VariantMappings) {
+  if (VariantMappings.empty())
+    return;
+
+  SmallString<256> Buffer;
+  llvm::raw_svector_ostream Out(Buffer);
+  for (const std::string &VariantMapping : VariantMappings)
+    Out << VariantMapping << ",";
+  // Get rid of the trailing ','.
+  assert(!Buffer.str().empty() && "Must have at least one char.");
+  Buffer.pop_back();
+
+  Module *M = CI->getModule();
+#ifndef NDEBUG
+  for (const std::string &VariantMapping : VariantMappings) {
+    LLVM_DEBUG(dbgs() << "VFABI: adding mapping '" << VariantMapping << "'\n");
+    Optional<VFInfo> VI = VFABI::tryDemangleForVFABI(VariantMapping, *M);
+    assert(VI.hasValue() && "Cannot add an invalid VFABI name.");
+    assert(M->getNamedValue(VI.getValue().VectorName) &&
+           "Cannot add variant to attribute: "
+           "vector function declaration is missing.");
+  }
+#endif
+  CI->addAttribute(
+      AttributeList::FunctionIndex,
+      Attribute::get(M->getContext(), MappingsAttrName, Buffer.str()));
 }

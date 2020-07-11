@@ -8,7 +8,7 @@
 //
 // UNSUPPORTED: libcpp-has-no-threads
 
-// FLAKY_TEST.
+// ALLOW_RETRIES: 2
 
 // <mutex>
 
@@ -21,7 +21,7 @@
 #include <cstdlib>
 #include <cassert>
 
-#include <iostream>
+#include "test_macros.h"
 
 std::mutex m;
 

@@ -99,7 +99,7 @@ class SchedMachineModel {
   bit CompleteModel = 1;
 
   // Indicates that we should do full overlap checking for multiple InstrRWs
-  // definining the same instructions within the same SchedMachineModel.
+  // defining the same instructions within the same SchedMachineModel.
   // FIXME: Remove when all in tree targets are clean with the full check
   // enabled.
   bit FullInstRWOverlapCheck = 1;
@@ -135,7 +135,7 @@ class ProcResourceKind;
 //
 // An optional Super resource may be given to model these resources as
 // a subset of the more general super resources. Using one of these
-// resources implies using one of the super resoruces.
+// resources implies using one of the super resources.
 //
 // ProcResourceUnits normally model a few buffered resources within an
 // out-of-order engine. Buffered resources may be held for multiple
@@ -163,7 +163,7 @@ class ProcResourceKind;
 // differently. Here we refer to stage between decoding into micro-ops
 // and moving them into a reservation station.) Normally NumMicroOps
 // is sufficient to limit dispatch/issue groups. However, some
-// processors can form groups of with only certain combinitions of
+// processors can form groups of with only certain combinations of
 // instruction types. e.g. POWER7.
 //
 // Use BufferSize = 1 for in-order execution units. This is used for
@@ -563,10 +563,10 @@ class RetireControlUnit<int bufferSize, int retirePerCycle> {
 
 // Base class for Load/StoreQueue.  It is used to identify processor resources
 // which describe load/store queues in the LS unit.
-class MemoryQueue<ProcResource PR> {
-  ProcResource QueueDescriptor = PR;
+class MemoryQueue<ProcResourceKind PR> {
+  ProcResourceKind QueueDescriptor = PR;
   SchedMachineModel SchedModel = ?;
 }
 
-class LoadQueue<ProcResource LDQueue> : MemoryQueue<LDQueue>;
-class StoreQueue<ProcResource STQueue> : MemoryQueue<STQueue>;
+class LoadQueue<ProcResourceKind LDQueue> : MemoryQueue<LDQueue>;
+class StoreQueue<ProcResourceKind STQueue> : MemoryQueue<STQueue>;

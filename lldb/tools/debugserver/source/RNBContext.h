@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef __RNBContext_h__
-#define __RNBContext_h__
+#ifndef LLDB_TOOLS_DEBUGSERVER_SOURCE_RNBCONTEXT_H
+#define LLDB_TOOLS_DEBUGSERVER_SOURCE_RNBCONTEXT_H
 
 #include "DNBError.h"
 #include "PThreadEvent.h"
@@ -42,9 +42,7 @@ public:
 
     all_event_bits = sticky_event_bits | normal_event_bits
   } event_t;
-  //------------------------------------------------------------------
   // Constructors and Destructors
-  //------------------------------------------------------------------
   RNBContext()
       : m_pid(INVALID_NUB_PROCESS), m_pid_stop_count(0),
         m_events(0, all_event_bits), m_pid_pthread(), m_launch_status(),
@@ -127,9 +125,7 @@ public:
   bool GetDetachOnError() { return m_detach_on_error; }
 
 protected:
-  //------------------------------------------------------------------
   // Classes that inherit from RNBContext can see and modify these
-  //------------------------------------------------------------------
   nub_process_t m_pid;
   std::string m_stdin;
   std::string m_stdout;
@@ -153,11 +149,8 @@ protected:
   static void *ThreadFunctionProcessStatus(void *arg);
 
 private:
-  //------------------------------------------------------------------
-  // Outlaw copy and assignment operators
-  //------------------------------------------------------------------
-  RNBContext(const RNBContext &rhs);
-  RNBContext &operator=(const RNBContext &rhs);
+  RNBContext(const RNBContext &rhs) = delete;
+  RNBContext &operator=(const RNBContext &rhs) = delete;
 };
 
-#endif // #ifndef __RNBContext_h__
+#endif // LLDB_TOOLS_DEBUGSERVER_SOURCE_RNBCONTEXT_H

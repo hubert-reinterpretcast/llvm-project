@@ -21,6 +21,7 @@
 #include "MCTargetDesc/HexagonMCExpr.h"
 #include "MCTargetDesc/HexagonMCInstrInfo.h"
 #include "MCTargetDesc/HexagonMCTargetDesc.h"
+#include "TargetInfo/HexagonTargetInfo.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -91,9 +92,7 @@ void HexagonAsmPrinter::printOperand(const MachineInstr *MI, unsigned OpNo,
     GetCPISymbol(MO.getIndex())->print(O, MAI);
     return;
   case MachineOperand::MO_GlobalAddress:
-    // Computing the address of a global symbol, not calling it.
-    getSymbol(MO.getGlobal())->print(O, MAI);
-    printOffset(MO.getOffset(), O);
+    PrintSymbolOperand(MO, O);
     return;
   }
 }
@@ -113,7 +112,6 @@ bool HexagonAsmPrinter::isBlockOnlyReachableByFallthrough(
 
 /// PrintAsmOperand - Print out an operand for an inline asm expression.
 bool HexagonAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
-                                        unsigned AsmVariant,
                                         const char *ExtraCode,
                                         raw_ostream &OS) {
   // Does this asm operand have a single letter operand modifier?
@@ -124,11 +122,7 @@ bool HexagonAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
     switch (ExtraCode[0]) {
     default:
       // See if this is a generic print operand
-      return AsmPrinter::PrintAsmOperand(MI, OpNo, AsmVariant, ExtraCode, OS);
-    case 'c': // Don't print "$" before a global var name or constant.
-      // Hexagon never has a prefix.
-      printOperand(MI, OpNo, OS);
-      return false;
+      return AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, OS);
     case 'L':
     case 'H': { // The highest-numbered register of a pair.
       const MachineOperand &MO = MI->getOperand(OpNo);
@@ -136,7 +130,7 @@ bool HexagonAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
       const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
       if (!MO.isReg())
         return true;
-      unsigned RegNumber = MO.getReg();
+      Register RegNumber = MO.getReg();
       // This should be an assert in the frontend.
       if (Hexagon::DoubleRegsRegClass.contains(RegNumber))
         RegNumber = TRI->getSubReg(RegNumber, ExtraCode[0] == 'L' ?
@@ -160,7 +154,6 @@ bool HexagonAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
 
 bool HexagonAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
                                               unsigned OpNo,
-                                              unsigned AsmVariant,
                                               const char *ExtraCode,
                                               raw_ostream &O) {
   if (ExtraCode && ExtraCode[0])
@@ -213,10 +206,10 @@ static MCSymbol *smallData(AsmPrinter &AP, const MachineInstr &MI,
 
     Sym = AP.OutContext.getOrCreateSymbol(Twine(symbolName));
     if (Sym->isUndefined()) {
-      OutStreamer.EmitLabel(Sym);
-      OutStreamer.EmitSymbolAttribute(Sym, MCSA_Global);
-      OutStreamer.EmitIntValue(Value, AlignSize);
-      OutStreamer.EmitCodeAlignment(AlignSize);
+      OutStreamer.emitLabel(Sym);
+      OutStreamer.emitSymbolAttribute(Sym, MCSA_Global);
+      OutStreamer.emitIntValue(Value, AlignSize);
+      OutStreamer.emitCodeAlignment(AlignSize);
     }
   } else {
     assert(Imm.isExpr() && "Expected expression and found none");
@@ -241,10 +234,10 @@ static MCSymbol *smallData(AsmPrinter &AP, const MachineInstr &MI,
     OutStreamer.SwitchSection(Section);
     Sym = AP.OutContext.getOrCreateSymbol(Twine(LitaName));
     if (Sym->isUndefined()) {
-      OutStreamer.EmitLabel(Sym);
-      OutStreamer.EmitSymbolAttribute(Sym, MCSA_Local);
-      OutStreamer.EmitValue(Imm.getExpr(), AlignSize);
-      OutStreamer.EmitCodeAlignment(AlignSize);
+      OutStreamer.emitLabel(Sym);
+      OutStreamer.emitSymbolAttribute(Sym, MCSA_Local);
+      OutStreamer.emitValue(Imm.getExpr(), AlignSize);
+      OutStreamer.emitCodeAlignment(AlignSize);
     }
   }
   return Sym;
@@ -747,7 +740,7 @@ void HexagonAsmPrinter::HexagonProcessInstruction(MCInst &Inst,
 }
 
 /// Print out a single Hexagon MI to the current output stream.
-void HexagonAsmPrinter::EmitInstruction(const MachineInstr *MI) {
+void HexagonAsmPrinter::emitInstruction(const MachineInstr *MI) {
   MCInst MCB;
   MCB.setOpcode(Hexagon::BUNDLE);
   MCB.addOperand(MCOperand::createImm(0));
@@ -775,9 +768,9 @@ void HexagonAsmPrinter::EmitInstruction(const MachineInstr *MI) {
   assert(Ok); (void)Ok;
   if (HexagonMCInstrInfo::bundleSize(MCB) == 0)
     return;
-  OutStreamer->EmitInstruction(MCB, getSubtargetInfo());
+  OutStreamer->emitInstruction(MCB, getSubtargetInfo());
 }
 
-extern "C" void LLVMInitializeHexagonAsmPrinter() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeHexagonAsmPrinter() {
   RegisterAsmPrinter<HexagonAsmPrinter> X(getTheHexagonTarget());
 }

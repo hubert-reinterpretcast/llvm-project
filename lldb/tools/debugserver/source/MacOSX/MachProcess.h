@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef __MachProcess_h__
-#define __MachProcess_h__
+#ifndef LLDB_TOOLS_DEBUGSERVER_SOURCE_MACOSX_MACHPROCESS_H
+#define LLDB_TOOLS_DEBUGSERVER_SOURCE_MACOSX_MACHPROCESS_H
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach-o/loader.h>
@@ -40,9 +40,7 @@ class DNBThreadResumeActions;
 
 class MachProcess {
 public:
-  //----------------------------------------------------------------------
   // Constructors and Destructors
-  //----------------------------------------------------------------------
   MachProcess();
   ~MachProcess();
 
@@ -79,9 +77,7 @@ public:
         : filename(), load_address(INVALID_NUB_ADDRESS), mod_date(0) {}
   };
 
-  //----------------------------------------------------------------------
   // Child process control
-  //----------------------------------------------------------------------
   pid_t AttachForDebug(pid_t pid, char *err_str, size_t err_len);
   pid_t LaunchForDebug(const char *path, char const *argv[], char const *envp[],
                        const char *working_directory, const char *stdin_path,
@@ -120,6 +116,7 @@ public:
 #endif
   static bool GetOSVersionNumbers(uint64_t *major, uint64_t *minor,
                                   uint64_t *patch);
+  static std::string GetMacCatalystVersionString();
 #ifdef WITH_BKS
   static void BKSCleanupAfterAttach(const void *attach_token,
                                     DNBError &err_str);
@@ -160,9 +157,7 @@ public:
   nub_size_t ReadMemory(nub_addr_t addr, nub_size_t size, void *buf);
   nub_size_t WriteMemory(nub_addr_t addr, nub_size_t size, const void *buf);
 
-  //----------------------------------------------------------------------
   // Path and arg accessors
-  //----------------------------------------------------------------------
   const char *Path() const { return m_path.c_str(); }
   size_t ArgumentCount() const { return m_args.size(); }
   const char *ArgumentAtIndex(size_t arg_idx) const {
@@ -171,9 +166,7 @@ public:
     return NULL;
   }
 
-  //----------------------------------------------------------------------
   // Breakpoint functions
-  //----------------------------------------------------------------------
   DNBBreakpoint *CreateBreakpoint(nub_addr_t addr, nub_size_t length,
                                   bool hardware);
   bool DisableBreakpoint(nub_addr_t addr, bool remove);
@@ -182,9 +175,7 @@ public:
   DNBBreakpointList &Breakpoints() { return m_breakpoints; }
   const DNBBreakpointList &Breakpoints() const { return m_breakpoints; }
 
-  //----------------------------------------------------------------------
   // Watchpoint functions
-  //----------------------------------------------------------------------
   DNBBreakpoint *CreateWatchpoint(nub_addr_t addr, nub_size_t length,
                                   uint32_t watch_type, bool hardware);
   bool DisableWatchpoint(nub_addr_t addr, bool remove);
@@ -194,9 +185,7 @@ public:
   DNBBreakpointList &Watchpoints() { return m_watchpoints; }
   const DNBBreakpointList &Watchpoints() const { return m_watchpoints; }
 
-  //----------------------------------------------------------------------
   // Exception thread functions
-  //----------------------------------------------------------------------
   bool StartSTDIOThread();
   static void *STDIOThread(void *arg);
   void ExceptionMessageReceived(const MachException::Message &exceptionMessage);
@@ -205,9 +194,7 @@ public:
   nub_size_t CopyImageInfos(struct DNBExecutableImageInfo **image_infos,
                             bool only_changed);
 
-  //----------------------------------------------------------------------
   // Profile functions
-  //----------------------------------------------------------------------
   void SetEnableAsyncProfiling(bool enable, uint64_t internal_usec,
                                DNBProfileDataScanType scan_type);
   bool IsProfilingEnabled() { return m_profile_enabled; }
@@ -217,9 +204,7 @@ public:
   void SignalAsyncProfileData(const char *info);
   size_t GetAsyncProfileData(char *buf, size_t buf_size);
 
-  //----------------------------------------------------------------------
   // Accessors
-  //----------------------------------------------------------------------
   pid_t ProcessID() const { return m_pid; }
   bool ProcessIDIsValid() const { return m_pid > 0; }
   pid_t SetProcessID(pid_t pid);
@@ -245,16 +230,29 @@ public:
                          uint64_t plo_pthread_tsd_base_address_offset,
                          uint64_t plo_pthread_tsd_base_offset,
                          uint64_t plo_pthread_tsd_entry_size);
-  const char *
-  GetDeploymentInfo(const struct load_command&, uint64_t load_command_address,
-                    uint32_t& major_version, uint32_t& minor_version,
-                    uint32_t& patch_version);
-  bool GetMachOInformationFromMemory(nub_addr_t mach_o_header_addr,
+
+  struct DeploymentInfo {
+    DeploymentInfo() = default;
+    operator bool() { return platform > 0; }
+    /// The Mach-O platform type;
+    unsigned char platform = 0;
+    /// Pre-LC_BUILD_VERSION files don't disambiguate between ios and ios
+    /// simulator.
+    bool maybe_simulator = false;
+    uint32_t major_version = 0;
+    uint32_t minor_version = 0;
+    uint32_t patch_version = 0;
+  };
+  DeploymentInfo GetDeploymentInfo(const struct load_command &,
+                                   uint64_t load_command_address);
+  static const char *GetPlatformString(unsigned char platform);
+  bool GetMachOInformationFromMemory(uint32_t platform,
+                                     nub_addr_t mach_o_header_addr,
                                      int wordsize,
                                      struct mach_o_information &inf);
   JSONGenerator::ObjectSP FormatDynamicLibrariesIntoJSON(
       const std::vector<struct binary_image_information> &image_infos);
-  void GetAllLoadedBinariesViaDYLDSPI(
+  uint32_t GetAllLoadedBinariesViaDYLDSPI(
       std::vector<struct binary_image_information> &image_infos);
   JSONGenerator::ObjectSP GetLoadedDynamicLibrariesInfos(
       nub_process_t pid, nub_addr_t image_list_address, nub_addr_t image_count);
@@ -352,9 +350,16 @@ private:
     eMachProcessFlagsUsingFBS = (1 << 3), // only read via ProcessUsingFrontBoard()
     eMachProcessFlagsBoardCalculated = (1 << 4)
   };
+
+  enum {
+    eMachProcessProfileNone = 0,
+    eMachProcessProfileCancel = (1 << 0)
+  };
+
   void Clear(bool detaching = false);
   void ReplyToAllExceptions();
   void PrivateResume();
+  void StopProfileThread();
 
   uint32_t Flags() const { return m_flags; }
   nub_state_t DoSIGSTOP(bool clear_bps_and_wps, bool allow_running,
@@ -389,7 +394,7 @@ private:
       m_profile_data_mutex; // Multithreaded protection for profile info data
   std::vector<std::string>
       m_profile_data; // Profile data, must be protected by m_profile_data_mutex
-
+  PThreadEvent m_profile_events; // Used for the profile thread cancellable wait  
   DNBThreadResumeActions m_thread_actions; // The thread actions for the current
                                            // MachProcess::Resume() call
   MachException::Message::collection m_exception_messages; // A collection of
@@ -428,7 +433,7 @@ private:
   // we don't report a spurious stop on the next resume.
   int m_auto_resume_signo; // If we resume the process and still haven't
                            // received our interrupt signal
-  // acknownledgement, we will shortly after the next resume. We store the
+  // acknowledgement, we will shortly after the next resume. We store the
   // interrupt signal in this variable so when we get the interrupt signal
   // as the sole reason for the process being stopped, we can auto resume
   // the process.
@@ -441,6 +446,7 @@ private:
                                    const uuid_t uuid, const char *path));
   void (*m_dyld_process_info_release)(void *info);
   void (*m_dyld_process_info_get_cache)(void *info, void *cacheInfo);
+  uint32_t (*m_dyld_process_info_get_platform)(void *info);
 };
 
-#endif // __MachProcess_h__
+#endif // LLDB_TOOLS_DEBUGSERVER_SOURCE_MACOSX_MACHPROCESS_H

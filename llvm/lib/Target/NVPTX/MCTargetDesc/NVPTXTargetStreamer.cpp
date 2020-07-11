@@ -26,13 +26,13 @@ NVPTXTargetStreamer::~NVPTXTargetStreamer() = default;
 
 void NVPTXTargetStreamer::outputDwarfFileDirectives() {
   for (const std::string &S : DwarfFiles)
-    getStreamer().EmitRawText(S.data());
+    getStreamer().emitRawText(S.data());
   DwarfFiles.clear();
 }
 
 void NVPTXTargetStreamer::closeLastSection() {
   if (HasSections)
-    getStreamer().EmitRawText("\t}");
+    getStreamer().emitRawText("\t}");
 }
 
 void NVPTXTargetStreamer::emitDwarfFileDirective(StringRef Directive) {
@@ -102,6 +102,11 @@ void NVPTXTargetStreamer::changeSection(const MCSection *CurSection,
 }
 
 void NVPTXTargetStreamer::emitRawBytes(StringRef Data) {
+  MCTargetStreamer::emitRawBytes(Data);
+  // TODO: enable this once the bug in the ptxas with the packed bytes is
+  // resolved. Currently, (it is confirmed by NVidia) it causes a crash in
+  // ptxas.
+#if 0
   const MCAsmInfo *MAI = Streamer.getContext().getAsmInfo();
   const char *Directive = MAI->getData8bitsDirective();
   unsigned NumElements = Data.size();
@@ -123,7 +128,8 @@ void NVPTXTargetStreamer::emitRawBytes(StringRef Data) {
       if (Label == Directive)
         Label = ",";
     }
-    Streamer.EmitRawText(OS.str());
+    Streamer.emitRawText(OS.str());
   }
+#endif
 }
 

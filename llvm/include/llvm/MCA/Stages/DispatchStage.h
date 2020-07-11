@@ -20,7 +20,6 @@
 
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MCA/HWEventListener.h"
 #include "llvm/MCA/HardwareUnits/RegisterFile.h"
 #include "llvm/MCA/HardwareUnits/RetireControlUnit.h"
 #include "llvm/MCA/Instruction.h"
@@ -68,9 +67,7 @@ class DispatchStage final : public Stage {
 public:
   DispatchStage(const MCSubtargetInfo &Subtarget, const MCRegisterInfo &MRI,
                 unsigned MaxDispatchWidth, RetireControlUnit &R,
-                RegisterFile &F)
-      : DispatchWidth(MaxDispatchWidth), AvailableEntries(MaxDispatchWidth),
-        CarryOver(0U), CarriedOver(), STI(Subtarget), RCU(R), PRF(F) {}
+                RegisterFile &F);
 
   bool isAvailable(const InstRef &IR) const override;
 

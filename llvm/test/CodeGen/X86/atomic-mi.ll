@@ -84,27 +84,21 @@ define void @store_atomic_imm_64(i64* %p) {
 ;
 ; X32-LABEL: store_atomic_imm_64:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    movl $42, %ebx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB3_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB3_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $8, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    movl $0, {{[0-9]+}}(%esp)
+; X32-NEXT:    movl $42, (%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   These are implemented with a CAS loop on 32 bit architectures, and thus
 ;   cannot be optimized in the same way as the others.
@@ -123,27 +117,21 @@ define void @store_atomic_imm_64_big(i64* %p) {
 ;
 ; X32-LABEL: store_atomic_imm_64_big:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    movl $23, %ecx
-; X32-NEXT:    movl $1215752192, %ebx # imm = 0x4876E800
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB4_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB4_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $8, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    movl $23, {{[0-9]+}}(%esp)
+; X32-NEXT:    movl $1215752192, (%esp) # imm = 0x4876E800
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
   store atomic i64 100000000000, i64* %p monotonic, align 8
   ret void
@@ -331,34 +319,27 @@ define void @add_64i(i64* %p) {
 ;
 ; X32-LABEL: add_64i:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    addl $2, %ebx
-; X32-NEXT:    adcl $0, %ecx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB14_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB14_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    addl $2, %ecx
+; X32-NEXT:    adcl $0, %edx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'addq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -375,34 +356,27 @@ define void @add_64r(i64* %p, i64 %v) {
 ;
 ; X32-LABEL: add_64r:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    addl {{[0-9]+}}(%esp), %ebx
-; X32-NEXT:    adcl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB15_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB15_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    addl 12(%ebp), %ecx
+; X32-NEXT:    adcl 16(%ebp), %edx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'addq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -565,34 +539,27 @@ define void @sub_64r(i64* %p, i64 %v) {
 ;
 ; X32-LABEL: sub_64r:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    subl {{[0-9]+}}(%esp), %ebx
-; X32-NEXT:    sbbl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB23_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB23_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    subl 12(%ebp), %ecx
+; X32-NEXT:    sbbl 16(%ebp), %edx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'subq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -737,33 +704,25 @@ define void @and_64i(i64* %p) {
 ;
 ; X32-LABEL: and_64i:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    andl $2, %ebx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB31_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB31_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    andl $2, %ecx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl $0, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'andq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -780,34 +739,27 @@ define void @and_64r(i64* %p, i64 %v) {
 ;
 ; X32-LABEL: and_64r:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    andl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    andl {{[0-9]+}}(%esp), %ebx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB32_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB32_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    andl 16(%ebp), %edx
+; X32-NEXT:    andl 12(%ebp), %ecx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'andq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -973,33 +925,26 @@ define void @or_64i(i64* %p) {
 ;
 ; X32-LABEL: or_64i:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    orl $2, %ebx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB41_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB41_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    orl $2, %ecx
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'orq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -1016,34 +961,27 @@ define void @or_64r(i64* %p, i64 %v) {
 ;
 ; X32-LABEL: or_64r:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    orl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    orl {{[0-9]+}}(%esp), %ebx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB42_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB42_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    orl 16(%ebp), %edx
+; X32-NEXT:    orl 12(%ebp), %ecx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'orq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -1209,33 +1147,26 @@ define void @xor_64i(i64* %p) {
 ;
 ; X32-LABEL: xor_64i:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    xorl $2, %ebx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB51_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB51_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    xorl $2, %ecx
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'xorq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -1252,34 +1183,27 @@ define void @xor_64r(i64* %p, i64 %v) {
 ;
 ; X32-LABEL: xor_64r:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    xorl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    xorl {{[0-9]+}}(%esp), %ebx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB52_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB52_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    xorl 16(%ebp), %edx
+; X32-NEXT:    xorl 12(%ebp), %ecx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'xorq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -1406,34 +1330,27 @@ define void @inc_64(i64* %p) {
 ;
 ; X32-LABEL: inc_64:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    addl $1, %ebx
-; X32-NEXT:    adcl $0, %ecx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB58_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB58_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    addl $1, %ecx
+; X32-NEXT:    adcl $0, %edx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;
 ; SLOW_INC-LABEL: inc_64:
@@ -1551,34 +1468,27 @@ define void @dec_64(i64* %p) {
 ;
 ; X32-LABEL: dec_64:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %edx, %ecx
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    addl $-1, %ebx
-; X32-NEXT:    adcl $-1, %ecx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB63_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB63_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    addl $-1, %ecx
+; X32-NEXT:    adcl $-1, %edx
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;
 ; SLOW_INC-LABEL: dec_64:
@@ -1681,34 +1591,27 @@ define void @not_64(i64* %p) {
 ;
 ; X32-LABEL: not_64:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    .cfi_offset %esi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    movl %edx, %ecx
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    notl %edx
 ; X32-NEXT:    notl %ecx
-; X32-NEXT:    notl %ebx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB68_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB68_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    movl %ecx, (%esp)
+; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do not check X86-32 as it cannot do 'notq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -1803,40 +1706,27 @@ define void @neg_64(i64* %p) {
 ;
 ; X32-LABEL: neg_64:
 ; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebx
+; X32-NEXT:    pushl %ebp
 ; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    pushl %edi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 16
-; X32-NEXT:    .cfi_offset %esi, -16
-; X32-NEXT:    .cfi_offset %edi, -12
-; X32-NEXT:    .cfi_offset %ebx, -8
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %edi
-; X32-NEXT:    xorl %esi, %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 8(%ebp), %eax
+; X32-NEXT:    fildll (%eax)
+; X32-NEXT:    fistpll {{[0-9]+}}(%esp)
 ; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%edi)
-; X32-NEXT:    movl %eax, %ebx
-; X32-NEXT:    negl %ebx
-; X32-NEXT:    sbbl %edx, %esi
-; X32-NEXT:    movl (%edi), %eax
-; X32-NEXT:    movl 4(%edi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB73_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    movl %esi, %ecx
-; X32-NEXT:    lock cmpxchg8b (%edi)
-; X32-NEXT:    jne .LBB73_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    popl %esi
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    popl %edi
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    .cfi_def_cfa_offset 4
+; X32-NEXT:    xorl %edx, %edx
+; X32-NEXT:    subl {{[0-9]+}}(%esp), %edx
+; X32-NEXT:    sbbl {{[0-9]+}}(%esp), %ecx
+; X32-NEXT:    movl %edx, (%esp)
+; X32-NEXT:    movl %ecx, {{[0-9]+}}(%esp)
+; X32-NEXT:    fildll (%esp)
+; X32-NEXT:    fistpll (%eax)
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
 ; X32-NEXT:    retl
 ;   We do neg check X86-32 as it canneg do 'negq'.
   %1 = load atomic i64, i64* %p acquire, align 8
@@ -1866,420 +1756,3 @@ define void @neg_32_seq_cst(i32* %p) {
   ret void
 }
 
-; ----- FADD -----
-
-define void @fadd_32r(float* %loc, float %val) {
-; X64-LABEL: fadd_32r:
-; X64:       # %bb.0:
-; X64-NEXT:    addss (%rdi), %xmm0
-; X64-NEXT:    movss %xmm0, (%rdi)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_32r:
-; X32:       # %bb.0:
-; X32-NEXT:    subl $8, %esp
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    movl (%eax), %ecx
-; X32-NEXT:    movl %ecx, (%esp)
-; X32-NEXT:    flds (%esp)
-; X32-NEXT:    fadds {{[0-9]+}}(%esp)
-; X32-NEXT:    fstps {{[0-9]+}}(%esp)
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    movl %ecx, (%eax)
-; X32-NEXT:    addl $8, %esp
-; X32-NEXT:    .cfi_def_cfa_offset 4
-; X32-NEXT:    retl
-; Don't check x86-32.
-; LLVM's SSE handling is conservative on x86-32 even without using atomics.
-  %floc = bitcast float* %loc to i32*
-  %1 = load atomic i32, i32* %floc seq_cst, align 4
-  %2 = bitcast i32 %1 to float
-  %add = fadd float %2, %val
-  %3 = bitcast float %add to i32
-  store atomic i32 %3, i32* %floc release, align 4
-  ret void
-}
-
-define void @fadd_64r(double* %loc, double %val) {
-; X64-LABEL: fadd_64r:
-; X64:       # %bb.0:
-; X64-NEXT:    addsd (%rdi), %xmm0
-; X64-NEXT:    movsd %xmm0, (%rdi)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_64r:
-; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebp
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    .cfi_offset %ebp, -8
-; X32-NEXT:    movl %esp, %ebp
-; X32-NEXT:    .cfi_def_cfa_register %ebp
-; X32-NEXT:    pushl %ebx
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    andl $-8, %esp
-; X32-NEXT:    subl $16, %esp
-; X32-NEXT:    .cfi_offset %esi, -16
-; X32-NEXT:    .cfi_offset %ebx, -12
-; X32-NEXT:    movl 8(%ebp), %esi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
-; X32-NEXT:    movl %eax, {{[0-9]+}}(%esp)
-; X32-NEXT:    fldl {{[0-9]+}}(%esp)
-; X32-NEXT:    faddl 12(%ebp)
-; X32-NEXT:    fstpl (%esp)
-; X32-NEXT:    movl (%esp), %ebx
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    movl (%esi), %eax
-; X32-NEXT:    movl 4(%esi), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB76_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esi)
-; X32-NEXT:    jne .LBB76_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    leal -8(%ebp), %esp
-; X32-NEXT:    popl %esi
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    popl %ebp
-; X32-NEXT:    .cfi_def_cfa %esp, 4
-; X32-NEXT:    retl
-; Don't check x86-32 (see comment above).
-  %floc = bitcast double* %loc to i64*
-  %1 = load atomic i64, i64* %floc seq_cst, align 8
-  %2 = bitcast i64 %1 to double
-  %add = fadd double %2, %val
-  %3 = bitcast double %add to i64
-  store atomic i64 %3, i64* %floc release, align 8
-  ret void
-}
-
-@glob32 = global float 0.000000e+00, align 4
-@glob64 = global double 0.000000e+00, align 8
-
-; Floating-point add to a global using an immediate.
-define void @fadd_32g() {
-; X64-LABEL: fadd_32g:
-; X64:       # %bb.0:
-; X64-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X64-NEXT:    addss {{.*}}(%rip), %xmm0
-; X64-NEXT:    movss %xmm0, {{.*}}(%rip)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_32g:
-; X32:       # %bb.0:
-; X32-NEXT:    subl $8, %esp
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    movl glob32, %eax
-; X32-NEXT:    movl %eax, (%esp)
-; X32-NEXT:    fld1
-; X32-NEXT:    fadds (%esp)
-; X32-NEXT:    fstps {{[0-9]+}}(%esp)
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    movl %eax, glob32
-; X32-NEXT:    addl $8, %esp
-; X32-NEXT:    .cfi_def_cfa_offset 4
-; X32-NEXT:    retl
-; Don't check x86-32 (see comment above).
-  %i = load atomic i32, i32* bitcast (float* @glob32 to i32*) monotonic, align 4
-  %f = bitcast i32 %i to float
-  %add = fadd float %f, 1.000000e+00
-  %s = bitcast float %add to i32
-  store atomic i32 %s, i32* bitcast (float* @glob32 to i32*) monotonic, align 4
-  ret void
-}
-
-define void @fadd_64g() {
-; X64-LABEL: fadd_64g:
-; X64:       # %bb.0:
-; X64-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero
-; X64-NEXT:    addsd {{.*}}(%rip), %xmm0
-; X64-NEXT:    movsd %xmm0, {{.*}}(%rip)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_64g:
-; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebp
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    .cfi_offset %ebp, -8
-; X32-NEXT:    movl %esp, %ebp
-; X32-NEXT:    .cfi_def_cfa_register %ebp
-; X32-NEXT:    pushl %ebx
-; X32-NEXT:    andl $-8, %esp
-; X32-NEXT:    subl $24, %esp
-; X32-NEXT:    .cfi_offset %ebx, -12
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b glob64
-; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
-; X32-NEXT:    movl %eax, {{[0-9]+}}(%esp)
-; X32-NEXT:    fld1
-; X32-NEXT:    faddl {{[0-9]+}}(%esp)
-; X32-NEXT:    fstpl (%esp)
-; X32-NEXT:    movl (%esp), %ebx
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    movl glob64+4, %edx
-; X32-NEXT:    movl glob64, %eax
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB78_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b glob64
-; X32-NEXT:    jne .LBB78_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    leal -4(%ebp), %esp
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    popl %ebp
-; X32-NEXT:    .cfi_def_cfa %esp, 4
-; X32-NEXT:    retl
-; Don't check x86-32 (see comment above).
-  %i = load atomic i64, i64* bitcast (double* @glob64 to i64*) monotonic, align 8
-  %f = bitcast i64 %i to double
-  %add = fadd double %f, 1.000000e+00
-  %s = bitcast double %add to i64
-  store atomic i64 %s, i64* bitcast (double* @glob64 to i64*) monotonic, align 8
-  ret void
-}
-
-; Floating-point add to a hard-coded immediate location using an immediate.
-define void @fadd_32imm() {
-; X64-LABEL: fadd_32imm:
-; X64:       # %bb.0:
-; X64-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X64-NEXT:    movl $3735928559, %eax # imm = 0xDEADBEEF
-; X64-NEXT:    addss (%rax), %xmm0
-; X64-NEXT:    movss %xmm0, (%rax)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_32imm:
-; X32:       # %bb.0:
-; X32-NEXT:    subl $8, %esp
-; X32-NEXT:    .cfi_def_cfa_offset 12
-; X32-NEXT:    movl -559038737, %eax
-; X32-NEXT:    movl %eax, (%esp)
-; X32-NEXT:    fld1
-; X32-NEXT:    fadds (%esp)
-; X32-NEXT:    fstps {{[0-9]+}}(%esp)
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    movl %eax, -559038737
-; X32-NEXT:    addl $8, %esp
-; X32-NEXT:    .cfi_def_cfa_offset 4
-; X32-NEXT:    retl
-; Don't check x86-32 (see comment above).
-  %i = load atomic i32, i32* inttoptr (i32 3735928559 to i32*) monotonic, align 4
-  %f = bitcast i32 %i to float
-  %add = fadd float %f, 1.000000e+00
-  %s = bitcast float %add to i32
-  store atomic i32 %s, i32* inttoptr (i32 3735928559 to i32*) monotonic, align 4
-  ret void
-}
-
-define void @fadd_64imm() {
-; X64-LABEL: fadd_64imm:
-; X64:       # %bb.0:
-; X64-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero
-; X64-NEXT:    movl $3735928559, %eax # imm = 0xDEADBEEF
-; X64-NEXT:    addsd (%rax), %xmm0
-; X64-NEXT:    movsd %xmm0, (%rax)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_64imm:
-; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebp
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    .cfi_offset %ebp, -8
-; X32-NEXT:    movl %esp, %ebp
-; X32-NEXT:    .cfi_def_cfa_register %ebp
-; X32-NEXT:    pushl %ebx
-; X32-NEXT:    andl $-8, %esp
-; X32-NEXT:    subl $24, %esp
-; X32-NEXT:    .cfi_offset %ebx, -12
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b -559038737
-; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
-; X32-NEXT:    movl %eax, {{[0-9]+}}(%esp)
-; X32-NEXT:    fld1
-; X32-NEXT:    faddl {{[0-9]+}}(%esp)
-; X32-NEXT:    fstpl (%esp)
-; X32-NEXT:    movl (%esp), %ebx
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    movl -559038737, %eax
-; X32-NEXT:    movl -559038733, %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB80_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b -559038737
-; X32-NEXT:    jne .LBB80_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    leal -4(%ebp), %esp
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    popl %ebp
-; X32-NEXT:    .cfi_def_cfa %esp, 4
-; X32-NEXT:    retl
-; Don't check x86-32 (see comment above).
-  %i = load atomic i64, i64* inttoptr (i64 3735928559 to i64*) monotonic, align 8
-  %f = bitcast i64 %i to double
-  %add = fadd double %f, 1.000000e+00
-  %s = bitcast double %add to i64
-  store atomic i64 %s, i64* inttoptr (i64 3735928559 to i64*) monotonic, align 8
-  ret void
-}
-
-; Floating-point add to a stack location.
-define void @fadd_32stack() {
-; X64-LABEL: fadd_32stack:
-; X64:       # %bb.0:
-; X64-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X64-NEXT:    addss -{{[0-9]+}}(%rsp), %xmm0
-; X64-NEXT:    movss %xmm0, -{{[0-9]+}}(%rsp)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_32stack:
-; X32:       # %bb.0:
-; X32-NEXT:    subl $12, %esp
-; X32-NEXT:    .cfi_def_cfa_offset 16
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    movl %eax, (%esp)
-; X32-NEXT:    fld1
-; X32-NEXT:    fadds (%esp)
-; X32-NEXT:    fstps {{[0-9]+}}(%esp)
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    movl %eax, {{[0-9]+}}(%esp)
-; X32-NEXT:    addl $12, %esp
-; X32-NEXT:    .cfi_def_cfa_offset 4
-; X32-NEXT:    retl
-; Don't check x86-32 (see comment above).
-  %ptr = alloca i32, align 4
-  %bc3 = bitcast i32* %ptr to float*
-  %load = load atomic i32, i32* %ptr acquire, align 4
-  %bc0 = bitcast i32 %load to float
-  %fadd = fadd float 1.000000e+00, %bc0
-  %bc1 = bitcast float %fadd to i32
-  store atomic i32 %bc1, i32* %ptr release, align 4
-  ret void
-}
-
-define void @fadd_64stack() {
-; X64-LABEL: fadd_64stack:
-; X64:       # %bb.0:
-; X64-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero
-; X64-NEXT:    addsd -{{[0-9]+}}(%rsp), %xmm0
-; X64-NEXT:    movsd %xmm0, -{{[0-9]+}}(%rsp)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_64stack:
-; X32:       # %bb.0:
-; X32-NEXT:    pushl %ebp
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    .cfi_offset %ebp, -8
-; X32-NEXT:    movl %esp, %ebp
-; X32-NEXT:    .cfi_def_cfa_register %ebp
-; X32-NEXT:    pushl %ebx
-; X32-NEXT:    andl $-8, %esp
-; X32-NEXT:    subl $32, %esp
-; X32-NEXT:    .cfi_offset %ebx, -12
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%esp)
-; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
-; X32-NEXT:    movl %eax, {{[0-9]+}}(%esp)
-; X32-NEXT:    fld1
-; X32-NEXT:    faddl {{[0-9]+}}(%esp)
-; X32-NEXT:    fstpl {{[0-9]+}}(%esp)
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %ebx
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    movl (%esp), %eax
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB82_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%esp)
-; X32-NEXT:    jne .LBB82_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    leal -4(%ebp), %esp
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    popl %ebp
-; X32-NEXT:    .cfi_def_cfa %esp, 4
-; X32-NEXT:    retl
-; Don't check x86-32 (see comment above).
-  %ptr = alloca i64, align 8
-  %bc3 = bitcast i64* %ptr to double*
-  %load = load atomic i64, i64* %ptr acquire, align 8
-  %bc0 = bitcast i64 %load to double
-  %fadd = fadd double 1.000000e+00, %bc0
-  %bc1 = bitcast double %fadd to i64
-  store atomic i64 %bc1, i64* %ptr release, align 8
-  ret void
-}
-
-define void @fadd_array(i64* %arg, double %arg1, i64 %arg2) {
-; X64-LABEL: fadd_array:
-; X64:       # %bb.0: # %bb
-; X64-NEXT:    addsd (%rdi,%rsi,8), %xmm0
-; X64-NEXT:    movsd %xmm0, (%rdi,%rsi,8)
-; X64-NEXT:    retq
-;
-; X32-LABEL: fadd_array:
-; X32:       # %bb.0: # %bb
-; X32-NEXT:    pushl %ebp
-; X32-NEXT:    .cfi_def_cfa_offset 8
-; X32-NEXT:    .cfi_offset %ebp, -8
-; X32-NEXT:    movl %esp, %ebp
-; X32-NEXT:    .cfi_def_cfa_register %ebp
-; X32-NEXT:    pushl %ebx
-; X32-NEXT:    pushl %edi
-; X32-NEXT:    pushl %esi
-; X32-NEXT:    andl $-8, %esp
-; X32-NEXT:    subl $24, %esp
-; X32-NEXT:    .cfi_offset %esi, -20
-; X32-NEXT:    .cfi_offset %edi, -16
-; X32-NEXT:    .cfi_offset %ebx, -12
-; X32-NEXT:    movl 20(%ebp), %esi
-; X32-NEXT:    movl 8(%ebp), %edi
-; X32-NEXT:    xorl %eax, %eax
-; X32-NEXT:    xorl %edx, %edx
-; X32-NEXT:    xorl %ecx, %ecx
-; X32-NEXT:    xorl %ebx, %ebx
-; X32-NEXT:    lock cmpxchg8b (%edi,%esi,8)
-; X32-NEXT:    movl %edx, {{[0-9]+}}(%esp)
-; X32-NEXT:    movl %eax, {{[0-9]+}}(%esp)
-; X32-NEXT:    fldl {{[0-9]+}}(%esp)
-; X32-NEXT:    faddl 12(%ebp)
-; X32-NEXT:    fstpl (%esp)
-; X32-NEXT:    movl (%esp), %ebx
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %ecx
-; X32-NEXT:    movl (%edi,%esi,8), %eax
-; X32-NEXT:    movl 4(%edi,%esi,8), %edx
-; X32-NEXT:    .p2align 4, 0x90
-; X32-NEXT:  .LBB83_1: # %atomicrmw.start
-; X32-NEXT:    # =>This Inner Loop Header: Depth=1
-; X32-NEXT:    lock cmpxchg8b (%edi,%esi,8)
-; X32-NEXT:    jne .LBB83_1
-; X32-NEXT:  # %bb.2: # %atomicrmw.end
-; X32-NEXT:    leal -12(%ebp), %esp
-; X32-NEXT:    popl %esi
-; X32-NEXT:    popl %edi
-; X32-NEXT:    popl %ebx
-; X32-NEXT:    popl %ebp
-; X32-NEXT:    .cfi_def_cfa %esp, 4
-; X32-NEXT:    retl
-; Don't check x86-32 (see comment above).
-bb:
-  %tmp4 = getelementptr inbounds i64, i64* %arg, i64 %arg2
-  %tmp6 = load atomic i64, i64* %tmp4 monotonic, align 8
-  %tmp7 = bitcast i64 %tmp6 to double
-  %tmp8 = fadd double %tmp7, %arg1
-  %tmp9 = bitcast double %tmp8 to i64
-  store atomic i64 %tmp9, i64* %tmp4 monotonic, align 8
-  ret void
-}

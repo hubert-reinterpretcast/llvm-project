@@ -26,10 +26,12 @@ namespace llvm {
 
 class Pass;
 class PassInstrumentationCallbacks;
+class raw_ostream;
 
 /// If -time-passes has been specified, report the timings immediately and then
-/// reset the timers to zero.
-void reportAndResetTimings();
+/// reset the timers to zero. By default it uses the stream created by
+/// CreateInfoOutputFile().
+void reportAndResetTimings(raw_ostream *OutStream = nullptr);
 
 /// Request the timer for this legacy-pass-manager's pass instance.
 Timer *getPassTimer(Pass *);
@@ -53,14 +55,17 @@ class TimePassesHandler {
   /// A group of all pass-timing timers.
   TimerGroup TG;
 
+  using TimerVector = llvm::SmallVector<std::unique_ptr<Timer>, 4>;
   /// Map of timers for pass invocations
-  DenseMap<PassInvocationID, std::unique_ptr<Timer>> TimingData;
-
-  /// Map that counts invocations of passes, for use in UniqPassID construction.
-  StringMap<unsigned> PassIDCountMap;
+  StringMap<TimerVector> TimingData;
 
   /// Stack of currently active timers.
   SmallVector<Timer *, 8> TimerStack;
+
+  /// Custom output stream to print timing information into.
+  /// By default (== nullptr) we emit time report into the stream created by
+  /// CreateInfoOutputFile().
+  raw_ostream *OutStream = nullptr;
 
   bool Enabled;
 
@@ -68,12 +73,7 @@ public:
   TimePassesHandler(bool Enabled = TimePassesIsEnabled);
 
   /// Destructor handles the print action if it has not been handled before.
-  ~TimePassesHandler() {
-    // First destroying the timers from TimingData, which deploys all their
-    // collected data into the TG time group member, which later prints itself
-    // when being destroyed.
-    TimingData.clear();
-  }
+  ~TimePassesHandler() { print(); }
 
   /// Prints out timing information and then resets the timers.
   void print();
@@ -84,15 +84,15 @@ public:
 
   void registerCallbacks(PassInstrumentationCallbacks &PIC);
 
+  /// Set a custom output stream for subsequent reporting.
+  void setOutStream(raw_ostream &OutStream);
+
 private:
   /// Dumps information for running/triggered timers, useful for debugging
   LLVM_DUMP_METHOD void dump() const;
 
   /// Returns the new timer for each new run of the pass.
   Timer &getPassTimer(StringRef PassID);
-
-  /// Returns the incremented counter for the next invocation of \p PassID.
-  unsigned nextPassID(StringRef PassID) { return ++PassIDCountMap[PassID]; }
 
   void startTimer(StringRef PassID);
   void stopTimer(StringRef PassID);

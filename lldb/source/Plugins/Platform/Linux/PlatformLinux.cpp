@@ -1,4 +1,4 @@
-//===-- PlatformLinux.cpp ---------------------------------------*- C++ -*-===//
+//===-- PlatformLinux.cpp -------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,7 +10,7 @@
 #include "lldb/Host/Config.h"
 
 #include <stdio.h>
-#ifndef LLDB_DISABLE_POSIX
+#if LLDB_ENABLE_POSIX
 #include <sys/utsname.h>
 #endif
 
@@ -34,9 +34,10 @@ using namespace lldb;
 using namespace lldb_private;
 using namespace lldb_private::platform_linux;
 
+LLDB_PLUGIN_DEFINE(PlatformLinux)
+
 static uint32_t g_initialize_count = 0;
 
-//------------------------------------------------------------------
 
 PlatformSP PlatformLinux::CreateInstance(bool force, const ArchSpec *arch) {
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM));
@@ -118,9 +119,7 @@ void PlatformLinux::Terminate() {
   PlatformPOSIX::Terminate();
 }
 
-//------------------------------------------------------------------
 /// Default Constructor
-//------------------------------------------------------------------
 PlatformLinux::PlatformLinux(bool is_host)
     : PlatformPOSIX(is_host) // This is the local host platform
 {}
@@ -202,7 +201,7 @@ bool PlatformLinux::GetSupportedArchitectureAtIndex(uint32_t idx,
 void PlatformLinux::GetStatus(Stream &strm) {
   Platform::GetStatus(strm);
 
-#ifndef LLDB_DISABLE_POSIX
+#if LLDB_ENABLE_POSIX
   // Display local kernel information only when we are running in host mode.
   // Otherwise, we would end up printing non-Linux information (when running on
   // Mac OS for example).
@@ -240,7 +239,7 @@ PlatformLinux::GetResumeCountForLaunchInfo(ProcessLaunchInfo &launch_info) {
 
   // Figure out what shell we're planning on using.
   const char *shell_name = strrchr(shell_string.c_str(), '/');
-  if (shell_name == NULL)
+  if (shell_name == nullptr)
     shell_name = shell_string.c_str();
   else
     shell_name++;
@@ -356,21 +355,21 @@ PlatformLinux::DebugProcess(ProcessLaunchInfo &launch_info, Debugger &debugger,
     // Handle the hijacking of process events.
     if (listener_sp) {
       const StateType state = process_sp->WaitForProcessToStop(
-          llvm::None, NULL, false, listener_sp);
+          llvm::None, nullptr, false, listener_sp);
 
       LLDB_LOG(log, "pid {0} state {0}", process_sp->GetID(), state);
     }
 
     // Hook up process PTY if we have one (which we should for local debugging
     // with llgs).
-    int pty_fd = launch_info.GetPTY().ReleaseMasterFileDescriptor();
+    int pty_fd = launch_info.GetPTY().ReleasePrimaryFileDescriptor();
     if (pty_fd != PseudoTerminal::invalid_fd) {
       process_sp->SetSTDIOFileDescriptor(pty_fd);
       LLDB_LOG(log, "hooked up STDIO pty to process");
     } else
       LLDB_LOG(log, "not using process STDIO pty");
   } else {
-    LLDB_LOG(log, "process launch failed: {0}", error);
+    LLDB_LOG(log, "{0}", error);
     // FIXME figure out appropriate cleanup here.  Do we delete the target? Do
     // we delete the process?  Does our caller do that?
   }
@@ -380,6 +379,8 @@ PlatformLinux::DebugProcess(ProcessLaunchInfo &launch_info, Debugger &debugger,
 
 void PlatformLinux::CalculateTrapHandlerSymbolNames() {
   m_trap_handlers.push_back(ConstString("_sigtramp"));
+  m_trap_handlers.push_back(ConstString("__kernel_rt_sigreturn"));
+  m_trap_handlers.push_back(ConstString("__restore_rt"));
 }
 
 MmapArgList PlatformLinux::GetMmapArgumentList(const ArchSpec &arch,
@@ -387,14 +388,7 @@ MmapArgList PlatformLinux::GetMmapArgumentList(const ArchSpec &arch,
                                                unsigned prot, unsigned flags,
                                                addr_t fd, addr_t offset) {
   uint64_t flags_platform = 0;
-  uint64_t map_anon = MAP_ANON;
-
-  // To get correct flags for MIPS Architecture
-  if (arch.GetTriple().getArch() == llvm::Triple::mips64 ||
-      arch.GetTriple().getArch() == llvm::Triple::mips64el ||
-      arch.GetTriple().getArch() == llvm::Triple::mips ||
-      arch.GetTriple().getArch() == llvm::Triple::mipsel)
-    map_anon = 0x800;
+  uint64_t map_anon = arch.IsMIPS() ? 0x800 : MAP_ANON;
 
   if (flags & eMmapFlagsPrivate)
     flags_platform |= MAP_PRIVATE;

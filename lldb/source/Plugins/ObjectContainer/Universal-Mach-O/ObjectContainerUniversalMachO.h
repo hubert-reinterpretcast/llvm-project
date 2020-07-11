@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_ObjectContainerUniversalMachO_h_
-#define liblldb_ObjectContainerUniversalMachO_h_
+#ifndef LLDB_SOURCE_PLUGINS_OBJECTCONTAINER_UNIVERSAL_MACH_O_OBJECTCONTAINERUNIVERSALMACHO_H
+#define LLDB_SOURCE_PLUGINS_OBJECTCONTAINER_UNIVERSAL_MACH_O_OBJECTCONTAINERUNIVERSALMACHO_H
 
 #include "lldb/Host/SafeMachO.h"
 #include "lldb/Symbol/ObjectContainer.h"
@@ -23,9 +23,7 @@ public:
 
   ~ObjectContainerUniversalMachO() override;
 
-  //------------------------------------------------------------------
   // Static Functions
-  //------------------------------------------------------------------
   static void Initialize();
 
   static void Terminate();
@@ -48,9 +46,7 @@ public:
 
   static bool MagicBytesMatch(const lldb_private::DataExtractor &data);
 
-  //------------------------------------------------------------------
   // Member Functions
-  //------------------------------------------------------------------
   bool ParseHeader() override;
 
   void Dump(lldb_private::Stream *s) const override;
@@ -62,9 +58,7 @@ public:
 
   lldb::ObjectFileSP GetObjectFile(const lldb_private::FileSpec *file) override;
 
-  //------------------------------------------------------------------
   // PluginInterface protocol
-  //------------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
@@ -78,4 +72,4 @@ protected:
                           std::vector<llvm::MachO::fat_arch> &fat_archs);
 };
 
-#endif // liblldb_ObjectContainerUniversalMachO_h_
+#endif // LLDB_SOURCE_PLUGINS_OBJECTCONTAINER_UNIVERSAL_MACH_O_OBJECTCONTAINERUNIVERSALMACHO_H

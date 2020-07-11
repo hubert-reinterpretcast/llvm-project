@@ -5,11 +5,13 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
+
 #include "Quality.h"
 #include "AST.h"
 #include "FileDistance.h"
+#include "SourceCode.h"
 #include "URI.h"
-#include "index/Index.h"
+#include "index/Symbol.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
@@ -41,8 +43,7 @@ static bool isReserved(llvm::StringRef Name) {
 static bool hasDeclInMainFile(const Decl &D) {
   auto &SourceMgr = D.getASTContext().getSourceManager();
   for (auto *Redecl : D.redecls()) {
-    auto Loc = SourceMgr.getSpellingLoc(Redecl->getLocation());
-    if (SourceMgr.isWrittenInMainFile(Loc))
+    if (isInsideMainFile(Redecl->getLocation(), SourceMgr))
       return true;
   }
   return false;
@@ -52,8 +53,7 @@ static bool hasUsingDeclInMainFile(const CodeCompletionResult &R) {
   const auto &Context = R.Declaration->getASTContext();
   const auto &SourceMgr = Context.getSourceManager();
   if (R.ShadowDecl) {
-    const auto Loc = SourceMgr.getExpansionLoc(R.ShadowDecl->getLocation());
-    if (SourceMgr.isWrittenInMainFile(Loc))
+    if (isInsideMainFile(R.ShadowDecl->getLocation(), SourceMgr))
       return true;
   }
   return false;
@@ -129,6 +129,8 @@ categorize(const index::SymbolInfo &D) {
   case index::SymbolKind::Extension:
   case index::SymbolKind::Union:
   case index::SymbolKind::TypeAlias:
+  case index::SymbolKind::TemplateTypeParm:
+  case index::SymbolKind::TemplateTemplateParm:
     return SymbolQualitySignals::Type;
   case index::SymbolKind::Function:
   case index::SymbolKind::ClassMethod:
@@ -147,6 +149,7 @@ categorize(const index::SymbolInfo &D) {
   case index::SymbolKind::Field:
   case index::SymbolKind::EnumConstant:
   case index::SymbolKind::Parameter:
+  case index::SymbolKind::NonTypeTemplateParm:
     return SymbolQualitySignals::Variable;
   case index::SymbolKind::Using:
   case index::SymbolKind::Module:
@@ -204,7 +207,7 @@ float SymbolQualitySignals::evaluate() const {
   // question of whether 0 references means a bad symbol or missing data.
   if (References >= 10) {
     // Use a sigmoid style boosting function, which flats out nicely for large
-    // numbers (e.g. 2.58 for 1M refererences).
+    // numbers (e.g. 2.58 for 1M references).
     // The following boosting function is equivalent to:
     //   m = 0.06
     //   f = 12.0
@@ -275,8 +278,9 @@ computeScope(const NamedDecl *D) {
   }
   if (InClass)
     return SymbolRelevanceSignals::ClassScope;
-  // This threshold could be tweaked, e.g. to treat module-visible as global.
-  if (D->getLinkageInternal() < ExternalLinkage)
+  // ExternalLinkage threshold could be tweaked, e.g. module-visible as global.
+  // Avoid caching linkage if it may change after enclosing code completion.
+  if (hasUnstableLinkage(D) || D->getLinkageInternal() < ExternalLinkage)
     return SymbolRelevanceSignals::FileScope;
   return SymbolRelevanceSignals::GlobalScope;
 }
@@ -335,6 +339,15 @@ static float scopeBoost(ScopeDistance &Distance,
   return std::max(0.65, 2.0 * std::pow(0.6, D / 2.0));
 }
 
+static llvm::Optional<llvm::StringRef>
+wordMatching(llvm::StringRef Name, const llvm::StringSet<> *ContextWords) {
+  if (ContextWords)
+    for (const auto& Word : ContextWords->keys())
+      if (Name.contains_lower(Word))
+        return Word;
+  return llvm::None;
+}
+
 float SymbolRelevanceSignals::evaluate() const {
   float Score = 1;
 
@@ -355,6 +368,9 @@ float SymbolRelevanceSignals::evaluate() const {
     // always in the accessible scope.
     Score *=
         SemaSaysInScope ? 2.0 : scopeBoost(*ScopeProximityMatch, SymbolScope);
+
+  if (wordMatching(Name, ContextWords))
+    Score *= 1.5;
 
   // Symbols like local variables may only be referenced within their scope.
   // Conversely if we're in that scope, it's likely we'll reference them.
@@ -412,7 +428,12 @@ float SymbolRelevanceSignals::evaluate() const {
 llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
                               const SymbolRelevanceSignals &S) {
   OS << llvm::formatv("=== Symbol relevance: {0}\n", S.evaluate());
+  OS << llvm::formatv("\tName: {0}\n", S.Name);
   OS << llvm::formatv("\tName match: {0}\n", S.NameMatch);
+  if (S.ContextWords)
+    OS << llvm::formatv(
+        "\tMatching context word: {0}\n",
+        wordMatching(S.Name, S.ContextWords).getValueOr("<none>"));
   OS << llvm::formatv("\tForbidden: {0}\n", S.Forbidden);
   OS << llvm::formatv("\tNeedsFixIts: {0}\n", S.NeedsFixIts);
   OS << llvm::formatv("\tIsInstanceMember: {0}\n", S.IsInstanceMember);
@@ -479,8 +500,6 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
   OS << llvm::formatv("\tNumber of parameters: {0}\n", S.NumberOfParameters);
   OS << llvm::formatv("\tNumber of optional parameters: {0}\n",
                       S.NumberOfOptionalParameters);
-  OS << llvm::formatv("\tContains active parameter: {0}\n",
-                      S.ContainsActiveParameter);
   OS << llvm::formatv("\tKind: {0}\n", S.Kind);
   return OS;
 }

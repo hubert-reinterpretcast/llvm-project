@@ -36,7 +36,8 @@ AsmLexer::AsmLexer(const MCAsmInfo &MAI) : MAI(MAI) {
 
 AsmLexer::~AsmLexer() = default;
 
-void AsmLexer::setBuffer(StringRef Buf, const char *ptr) {
+void AsmLexer::setBuffer(StringRef Buf, const char *ptr,
+                         bool EndStatementAtEOF) {
   CurBuf = Buf;
 
   if (ptr)
@@ -45,6 +46,7 @@ void AsmLexer::setBuffer(StringRef Buf, const char *ptr) {
     CurPtr = CurBuf.begin();
 
   TokStart = nullptr;
+  this->EndStatementAtEOF = EndStatementAtEOF;
 }
 
 /// ReturnError - Set the error to the specified string at the specified
@@ -61,8 +63,6 @@ int AsmLexer::getNextChar() {
   return (unsigned char)*CurPtr++;
 }
 
-/// LexFloatLiteral: [0-9]*[.][0-9]*([eE][+-]?[0-9]*)?
-///
 /// The leading integral digit sequence and dot should have already been
 /// consumed, some or all of the fractional digit sequence *can* have been
 /// consumed.
@@ -71,13 +71,16 @@ AsmToken AsmLexer::LexFloatLiteral() {
   while (isDigit(*CurPtr))
     ++CurPtr;
 
-  // Check for exponent; we intentionally accept a slighlty wider set of
-  // literals here and rely on the upstream client to reject invalid ones (e.g.,
-  // "1e+").
-  if (*CurPtr == 'e' || *CurPtr == 'E') {
+  if (*CurPtr == '-' || *CurPtr == '+')
+    return ReturnError(CurPtr, "Invalid sign in float literal");
+
+  // Check for exponent
+  if ((*CurPtr == 'e' || *CurPtr == 'E')) {
     ++CurPtr;
+
     if (*CurPtr == '-' || *CurPtr == '+')
       ++CurPtr;
+
     while (isDigit(*CurPtr))
       ++CurPtr;
   }
@@ -145,8 +148,9 @@ AsmToken AsmLexer::LexIdentifier() {
     // Disambiguate a .1243foo identifier from a floating literal.
     while (isDigit(*CurPtr))
       ++CurPtr;
-    if (*CurPtr == 'e' || *CurPtr == 'E' ||
-        !IsIdentifierChar(*CurPtr, AllowAtInIdentifier))
+
+    if (!IsIdentifierChar(*CurPtr, AllowAtInIdentifier) ||
+        *CurPtr == 'e' || *CurPtr == 'E')
       return LexFloatLiteral();
   }
 
@@ -326,8 +330,9 @@ AsmToken AsmLexer::LexDigit() {
     unsigned Radix = doHexLookAhead(CurPtr, 10, LexMasmIntegers);
     bool isHex = Radix == 16;
     // Check for floating point literals.
-    if (!isHex && (*CurPtr == '.' || *CurPtr == 'e')) {
-      ++CurPtr;
+    if (!isHex && (*CurPtr == '.' || *CurPtr == 'e' || *CurPtr == 'E')) {
+      if (*CurPtr == '.')
+        ++CurPtr;
       return LexFloatLiteral();
     }
 
@@ -581,7 +586,7 @@ AsmToken AsmLexer::LexToken() {
 
   // If we're missing a newline at EOF, make sure we still get an
   // EndOfStatement token before the Eof token.
-  if (CurChar == EOF && !IsAtStartOfStatement) {
+  if (CurChar == EOF && !IsAtStartOfStatement && EndStatementAtEOF) {
     IsAtStartOfLine = true;
     IsAtStartOfStatement = true;
     return AsmToken(AsmToken::EndOfStatement, StringRef(TokStart, 1));
@@ -591,15 +596,24 @@ AsmToken AsmLexer::LexToken() {
   IsAtStartOfStatement = false;
   switch (CurChar) {
   default:
-    // Handle identifier: [a-zA-Z_.][a-zA-Z0-9_$.@]*
-    if (isalpha(CurChar) || CurChar == '_' || CurChar == '.')
-      return LexIdentifier();
+    if (MAI.doesAllowSymbolAtNameStart()) {
+      // Handle Microsoft-style identifier: [a-zA-Z_$.@?][a-zA-Z0-9_$.@?]*
+      if (!isDigit(CurChar) &&
+          IsIdentifierChar(CurChar, MAI.doesAllowAtInName()))
+        return LexIdentifier();
+    } else {
+      // Handle identifier: [a-zA-Z_.][a-zA-Z0-9_$.@]*
+      if (isalpha(CurChar) || CurChar == '_' || CurChar == '.')
+        return LexIdentifier();
+    }
 
     // Unknown character, emit an error.
     return ReturnError(TokStart, "invalid character in input");
   case EOF:
-    IsAtStartOfLine = true;
-    IsAtStartOfStatement = true;
+    if (EndStatementAtEOF) {
+      IsAtStartOfLine = true;
+      IsAtStartOfStatement = true;
+    }
     return AsmToken(AsmToken::Eof, StringRef(TokStart, 0));
   case 0:
   case ' ':

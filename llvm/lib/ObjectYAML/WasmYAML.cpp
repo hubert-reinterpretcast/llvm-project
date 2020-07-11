@@ -81,6 +81,12 @@ static void sectionMapping(IO &IO, WasmYAML::ProducersSection &Section) {
   IO.mapOptional("SDKs", Section.SDKs);
 }
 
+static void sectionMapping(IO &IO, WasmYAML::TargetFeaturesSection &Section) {
+  commonSectionMapping(IO, Section);
+  IO.mapRequired("Name", Section.Name);
+  IO.mapRequired("Features", Section.Features);
+}
+
 static void sectionMapping(IO &IO, WasmYAML::CustomSection &Section) {
   commonSectionMapping(IO, Section);
   IO.mapRequired("Name", Section.Name);
@@ -112,14 +118,14 @@ static void sectionMapping(IO &IO, WasmYAML::MemorySection &Section) {
   IO.mapOptional("Memories", Section.Memories);
 }
 
-static void sectionMapping(IO &IO, WasmYAML::GlobalSection &Section) {
-  commonSectionMapping(IO, Section);
-  IO.mapOptional("Globals", Section.Globals);
-}
-
 static void sectionMapping(IO &IO, WasmYAML::EventSection &Section) {
   commonSectionMapping(IO, Section);
   IO.mapOptional("Events", Section.Events);
+}
+
+static void sectionMapping(IO &IO, WasmYAML::GlobalSection &Section) {
+  commonSectionMapping(IO, Section);
+  IO.mapOptional("Globals", Section.Globals);
 }
 
 static void sectionMapping(IO &IO, WasmYAML::ExportSection &Section) {
@@ -145,6 +151,11 @@ static void sectionMapping(IO &IO, WasmYAML::CodeSection &Section) {
 static void sectionMapping(IO &IO, WasmYAML::DataSection &Section) {
   commonSectionMapping(IO, Section);
   IO.mapRequired("Segments", Section.Segments);
+}
+
+static void sectionMapping(IO &IO, WasmYAML::DataCountSection &Section) {
+  commonSectionMapping(IO, Section);
+  IO.mapRequired("Count", Section.Count);
 }
 
 void MappingTraits<std::unique_ptr<WasmYAML::Section>>::mapping(
@@ -180,6 +191,10 @@ void MappingTraits<std::unique_ptr<WasmYAML::Section>>::mapping(
       if (!IO.outputting())
         Section.reset(new WasmYAML::ProducersSection());
       sectionMapping(IO, *cast<WasmYAML::ProducersSection>(Section.get()));
+    } else if (SectionName == "target_features") {
+      if (!IO.outputting())
+        Section.reset(new WasmYAML::TargetFeaturesSection());
+      sectionMapping(IO, *cast<WasmYAML::TargetFeaturesSection>(Section.get()));
     } else {
       if (!IO.outputting())
         Section.reset(new WasmYAML::CustomSection(SectionName));
@@ -212,15 +227,15 @@ void MappingTraits<std::unique_ptr<WasmYAML::Section>>::mapping(
       Section.reset(new WasmYAML::MemorySection());
     sectionMapping(IO, *cast<WasmYAML::MemorySection>(Section.get()));
     break;
-  case wasm::WASM_SEC_GLOBAL:
-    if (!IO.outputting())
-      Section.reset(new WasmYAML::GlobalSection());
-    sectionMapping(IO, *cast<WasmYAML::GlobalSection>(Section.get()));
-    break;
   case wasm::WASM_SEC_EVENT:
     if (!IO.outputting())
       Section.reset(new WasmYAML::EventSection());
     sectionMapping(IO, *cast<WasmYAML::EventSection>(Section.get()));
+    break;
+  case wasm::WASM_SEC_GLOBAL:
+    if (!IO.outputting())
+      Section.reset(new WasmYAML::GlobalSection());
+    sectionMapping(IO, *cast<WasmYAML::GlobalSection>(Section.get()));
     break;
   case wasm::WASM_SEC_EXPORT:
     if (!IO.outputting())
@@ -247,6 +262,11 @@ void MappingTraits<std::unique_ptr<WasmYAML::Section>>::mapping(
       Section.reset(new WasmYAML::DataSection());
     sectionMapping(IO, *cast<WasmYAML::DataSection>(Section.get()));
     break;
+  case wasm::WASM_SEC_DATACOUNT:
+    if (!IO.outputting())
+      Section.reset(new WasmYAML::DataCountSection());
+    sectionMapping(IO, *cast<WasmYAML::DataCountSection>(Section.get()));
+    break;
   default:
     llvm_unreachable("Unknown section type");
   }
@@ -268,14 +288,15 @@ void ScalarEnumerationTraits<WasmYAML::SectionType>::enumeration(
   ECase(ELEM);
   ECase(CODE);
   ECase(DATA);
+  ECase(DATACOUNT);
 #undef ECase
 }
 
 void MappingTraits<WasmYAML::Signature>::mapping(
     IO &IO, WasmYAML::Signature &Signature) {
   IO.mapRequired("Index", Signature.Index);
-  IO.mapRequired("ReturnType", Signature.ReturnType);
   IO.mapRequired("ParamTypes", Signature.ParamTypes);
+  IO.mapRequired("ReturnTypes", Signature.ReturnTypes);
 }
 
 void MappingTraits<WasmYAML::Table>::mapping(IO &IO, WasmYAML::Table &Table) {
@@ -308,6 +329,21 @@ void MappingTraits<WasmYAML::ProducerEntry>::mapping(
     IO &IO, WasmYAML::ProducerEntry &ProducerEntry) {
   IO.mapRequired("Name", ProducerEntry.Name);
   IO.mapRequired("Version", ProducerEntry.Version);
+}
+
+void ScalarEnumerationTraits<WasmYAML::FeaturePolicyPrefix>::enumeration(
+    IO &IO, WasmYAML::FeaturePolicyPrefix &Kind) {
+#define ECase(X) IO.enumCase(Kind, #X, wasm::WASM_FEATURE_PREFIX_##X);
+  ECase(USED);
+  ECase(REQUIRED);
+  ECase(DISALLOWED);
+#undef ECase
+}
+
+void MappingTraits<WasmYAML::FeatureEntry>::mapping(
+    IO &IO, WasmYAML::FeatureEntry &FeatureEntry) {
+  IO.mapRequired("Prefix", FeatureEntry.Prefix);
+  IO.mapRequired("Name", FeatureEntry.Name);
 }
 
 void MappingTraits<WasmYAML::SegmentInfo>::mapping(
@@ -397,6 +433,11 @@ void MappingTraits<wasm::WasmInitExpr>::mapping(IO &IO,
   case wasm::WASM_OPCODE_GLOBAL_GET:
     IO.mapRequired("Index", Expr.Value.Global);
     break;
+  case wasm::WASM_OPCODE_REF_NULL: {
+    WasmYAML::ValueType Ty = wasm::WASM_TYPE_EXTERNREF;
+    IO.mapRequired("Type", Ty);
+    break;
+  }
   }
 }
 
@@ -448,7 +489,8 @@ void MappingTraits<WasmYAML::SymbolInfo>::mapping(IO &IO,
                                                   WasmYAML::SymbolInfo &Info) {
   IO.mapRequired("Index", Info.Index);
   IO.mapRequired("Kind", Info.Kind);
-  IO.mapRequired("Name", Info.Name);
+  if (Info.Kind != wasm::WASM_SYMBOL_TYPE_SECTION)
+    IO.mapRequired("Name", Info.Name);
   IO.mapRequired("Flags", Info.Flags);
   if (Info.Kind == wasm::WASM_SYMBOL_TYPE_FUNCTION) {
     IO.mapRequired("Function", Info.ElementIndex);
@@ -480,6 +522,7 @@ void ScalarBitSetTraits<WasmYAML::LimitFlags>::bitset(
 #define BCase(X) IO.bitSetCase(Value, #X, wasm::WASM_LIMITS_FLAG_##X)
   BCase(HAS_MAX);
   BCase(IS_SHARED);
+  BCase(IS_64);
 #undef BCase
 }
 
@@ -497,6 +540,8 @@ void ScalarBitSetTraits<WasmYAML::SymbolFlags>::bitset(
   BCaseMask(VISIBILITY_MASK, VISIBILITY_HIDDEN);
   BCaseMask(UNDEFINED, UNDEFINED);
   BCaseMask(EXPORTED, EXPORTED);
+  BCaseMask(EXPLICIT_NAME, EXPLICIT_NAME);
+  BCaseMask(NO_STRIP, NO_STRIP);
 #undef BCaseMask
 }
 
@@ -520,8 +565,9 @@ void ScalarEnumerationTraits<WasmYAML::ValueType>::enumeration(
   ECase(F64);
   ECase(V128);
   ECase(FUNCREF);
+  ECase(EXNREF);
+  ECase(EXTERNREF);
   ECase(FUNC);
-  ECase(NORESULT);
 #undef ECase
 }
 
@@ -545,6 +591,7 @@ void ScalarEnumerationTraits<WasmYAML::Opcode>::enumeration(
   ECase(F64_CONST);
   ECase(F32_CONST);
   ECase(GLOBAL_GET);
+  ECase(REF_NULL);
 #undef ECase
 }
 

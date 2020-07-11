@@ -1,4 +1,4 @@
-//===-- LibCxxInitializerList.cpp -------------------------------*- C++ -*-===//
+//===-- LibCxxInitializerList.cpp -----------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -33,7 +33,7 @@ public:
 
   bool MightHaveChildren() override;
 
-  size_t GetIndexOfChildWithName(const ConstString &name) override;
+  size_t GetIndexOfChildWithName(ConstString name) override;
 
 private:
   ValueObject *m_start;
@@ -108,7 +108,7 @@ bool lldb_private::formatters::LibcxxInitializerListSyntheticFrontEnd::
 }
 
 size_t lldb_private::formatters::LibcxxInitializerListSyntheticFrontEnd::
-    GetIndexOfChildWithName(const ConstString &name) {
+    GetIndexOfChildWithName(ConstString name) {
   if (!m_start)
     return UINT32_MAX;
   return ExtractIndexFromString(name.GetCString());

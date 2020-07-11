@@ -15,14 +15,6 @@
 
 #include <stdint.h>
 
-namespace llvm {
-class Target;
-
-Target &getTheNVPTXTarget32();
-Target &getTheNVPTXTarget64();
-
-} // End llvm namespace
-
 // Defines symbolic names for PTX registers.
 #define GET_REGINFO_ENUM
 #include "NVPTXGenRegisterInfo.inc"

@@ -6,19 +6,16 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef SymbolFileDWARF_LogChannelDWARF_h_
-#define SymbolFileDWARF_LogChannelDWARF_h_
+#ifndef LLDB_SOURCE_PLUGINS_SYMBOLFILE_DWARF_LOGCHANNELDWARF_H
+#define LLDB_SOURCE_PLUGINS_SYMBOLFILE_DWARF_LOGCHANNELDWARF_H
 
 #include "lldb/Utility/Log.h"
 
 #define DWARF_LOG_DEBUG_INFO (1u << 1)
 #define DWARF_LOG_DEBUG_LINE (1u << 2)
-#define DWARF_LOG_DEBUG_PUBNAMES (1u << 3)
-#define DWARF_LOG_DEBUG_PUBTYPES (1u << 4)
-#define DWARF_LOG_DEBUG_ARANGES (1u << 5)
-#define DWARF_LOG_LOOKUPS (1u << 6)
-#define DWARF_LOG_TYPE_COMPLETION (1u << 7)
-#define DWARF_LOG_DEBUG_MAP (1u << 8)
+#define DWARF_LOG_LOOKUPS (1u << 3)
+#define DWARF_LOG_TYPE_COMPLETION (1u << 4)
+#define DWARF_LOG_DEBUG_MAP (1u << 5)
 #define DWARF_LOG_ALL (UINT32_MAX)
 #define DWARF_LOG_DEFAULT (DWARF_LOG_DEBUG_INFO)
 
@@ -35,4 +32,4 @@ public:
 };
 }
 
-#endif // SymbolFileDWARF_LogChannelDWARF_h_
+#endif // LLDB_SOURCE_PLUGINS_SYMBOLFILE_DWARF_LOGCHANNELDWARF_H

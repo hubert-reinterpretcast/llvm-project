@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueFormat_h_
-#define liblldb_OptionValueFormat_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUEFORMAT_H
+#define LLDB_INTERPRETER_OPTIONVALUEFORMAT_H
 
 #include "lldb/Interpreter/OptionValue.h"
 
@@ -24,9 +24,7 @@ public:
 
   ~OptionValueFormat() override {}
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeFormat; }
 
@@ -48,9 +46,7 @@ public:
 
   lldb::OptionValueSP DeepCopy() const override;
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   lldb::Format GetCurrentValue() const { return m_current_value; }
 
@@ -67,4 +63,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueFormat_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUEFORMAT_H

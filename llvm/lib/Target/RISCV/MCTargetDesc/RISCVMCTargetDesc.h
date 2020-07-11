@@ -26,14 +26,7 @@ class MCInstrInfo;
 class MCObjectTargetWriter;
 class MCRegisterInfo;
 class MCSubtargetInfo;
-class StringRef;
 class Target;
-class Triple;
-class raw_ostream;
-class raw_pwrite_stream;
-
-Target &getTheRISCV32Target();
-Target &getTheRISCV64Target();
 
 MCCodeEmitter *createRISCVMCCodeEmitter(const MCInstrInfo &MCII,
                                         const MCRegisterInfo &MRI,

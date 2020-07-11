@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_PlatformRemoteAppleTV_h_
-#define liblldb_PlatformRemoteAppleTV_h_
+#ifndef LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMREMOTEAPPLETV_H
+#define LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMREMOTEAPPLETV_H
 
 #include <string>
 
@@ -23,9 +23,7 @@ public:
 
   ~PlatformRemoteAppleTV() override = default;
 
-  //------------------------------------------------------------
   // Class Functions
-  //------------------------------------------------------------
   static lldb::PlatformSP CreateInstance(bool force,
                                          const lldb_private::ArchSpec *arch);
 
@@ -37,18 +35,14 @@ public:
 
   static const char *GetDescriptionStatic();
 
-  //------------------------------------------------------------
   // lldb_private::PluginInterface functions
-  //------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override {
     return GetPluginNameStatic();
   }
 
   uint32_t GetPluginVersion() override { return 1; }
 
-  //------------------------------------------------------------
   // lldb_private::Platform functions
-  //------------------------------------------------------------
 
   const char *GetDescription() override { return GetDescriptionStatic(); }
 
@@ -57,16 +51,16 @@ public:
 
 protected:
 
-  //------------------------------------------------------------
   // lldb_private::PlatformRemoteDarwinDevice functions
-  //------------------------------------------------------------
 
   void GetDeviceSupportDirectoryNames (std::vector<std::string> &dirnames) override;
 
   std::string GetPlatformName () override;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(PlatformRemoteAppleTV);
+  PlatformRemoteAppleTV(const PlatformRemoteAppleTV &) = delete;
+  const PlatformRemoteAppleTV &
+  operator=(const PlatformRemoteAppleTV &) = delete;
 };
 
-#endif // liblldb_PlatformRemoteAppleTV_h_
+#endif // LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMREMOTEAPPLETV_H

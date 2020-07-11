@@ -1,7 +1,8 @@
-// RUN: llvm-mc -arch=amdgcn -mcpu=gfx900 -show-encoding %s | FileCheck -check-prefix=GFX9 %s
+// RUN: not llvm-mc -arch=amdgcn -mcpu=gfx900 -show-encoding %s | FileCheck -check-prefix=GFX9 %s
 // RUN: not llvm-mc -arch=amdgcn -mcpu=tahiti -show-encoding %s 2>&1 | FileCheck -check-prefix=NOVI %s
 // RUN: not llvm-mc -arch=amdgcn -mcpu=hawaii -show-encoding %s 2>&1 | FileCheck -check-prefix=NOVI %s
 // RUN: not llvm-mc -arch=amdgcn -mcpu=tonga -show-encoding %s 2>&1 | FileCheck -check-prefix=NOVI %s
+// RUN: not llvm-mc -arch=amdgcn -mcpu=gfx900 -show-encoding %s 2>&1 | FileCheck -check-prefix=NOGFX9 %s
 
 v_lshl_add_u32 v1, v2, v3, v4
 // GFX9: v_lshl_add_u32 v1, v2, v3, v4 ; encoding: [0x01,0x00,0xfd,0xd1,0x02,0x07,0x12,0x04]
@@ -312,7 +313,7 @@ v_mad_i16 v5, v1, -1, v3
 // GFX9: v_mad_i16 v5, v1, -1, v3 ; encoding: [0x05,0x00,0x05,0xd2,0x01,0x83,0x0d,0x04]
 
 v_mad_i16 v5, v1, v2, -4.0
-// GFX9: v_mad_i16 v5, v1, v2, -4.0 ; encoding: [0x05,0x00,0x05,0xd2,0x01,0x05,0xde,0x03]
+// NOGFX9: invalid literal operand
 
 v_mad_i16 v5, v1, v2, v3 clamp
 // GFX9: v_mad_i16 v5, v1, v2, v3 clamp ; encoding: [0x05,0x80,0x05,0xd2,0x01,0x05,0x0e,0x04]
@@ -348,10 +349,10 @@ v_mad_legacy_i16 v5, v1, -1, v3
 // GFX9: v_mad_legacy_i16 v5, v1, -1, v3 ; encoding: [0x05,0x00,0xec,0xd1,0x01,0x83,0x0d,0x04]
 
 v_mad_legacy_i16 v5, v1, v2, -4.0
-// GFX9: v_mad_legacy_i16 v5, v1, v2, -4.0 ; encoding: [0x05,0x00,0xec,0xd1,0x01,0x05,0xde,0x03]
+// NOGFX9: invalid literal operand
 
 v_mad_legacy_i16 v5, v1, v2, -4.0 clamp
-// GFX9: v_mad_legacy_i16 v5, v1, v2, -4.0 clamp ; encoding: [0x05,0x80,0xec,0xd1,0x01,0x05,0xde,0x03]
+// NOGFX9: invalid literal operand
 
 v_mad_legacy_u16_e64 v5, 0, v2, v3
 // GFX9: v_mad_legacy_u16 v5, 0, v2, v3 ; encoding: [0x05,0x00,0xeb,0xd1,0x80,0x04,0x0e,0x04]
@@ -360,10 +361,10 @@ v_mad_legacy_u16 v5, v1, -1, v3
 // GFX9: v_mad_legacy_u16 v5, v1, -1, v3 ; encoding: [0x05,0x00,0xeb,0xd1,0x01,0x83,0x0d,0x04]
 
 v_mad_legacy_u16 v5, v1, v2, -4.0
-// GFX9: v_mad_legacy_u16 v5, v1, v2, -4.0 ; encoding: [0x05,0x00,0xeb,0xd1,0x01,0x05,0xde,0x03]
+// NOGFX9: invalid literal operand
 
 v_mad_legacy_u16 v5, v1, v2, -4.0 clamp
-// GFX9: v_mad_legacy_u16 v5, v1, v2, -4.0 clamp ; encoding: [0x05,0x80,0xeb,0xd1,0x01,0x05,0xde,0x03]
+// NOGFX9: invalid literal operand
 
 v_mad_u16_e64 v5, 0, v2, v3
 // GFX9: v_mad_u16 v5, 0, v2, v3 ; encoding: [0x05,0x00,0x04,0xd2,0x80,0x04,0x0e,0x04]
@@ -372,7 +373,7 @@ v_mad_u16 v5, v1, -1, v3
 // GFX9: v_mad_u16 v5, v1, -1, v3 ; encoding: [0x05,0x00,0x04,0xd2,0x01,0x83,0x0d,0x04]
 
 v_mad_u16 v5, v1, v2, -4.0
-// GFX9: v_mad_u16 v5, v1, v2, -4.0 ; encoding: [0x05,0x00,0x04,0xd2,0x01,0x05,0xde,0x03]
+// NOGFX9: invalid literal operand
 
 v_mad_u16 v5, v1, v2, v3 clamp
 // GFX9: v_mad_u16 v5, v1, v2, v3 clamp ; encoding: [0x05,0x80,0x04,0xd2,0x01,0x05,0x0e,0x04]
@@ -453,3 +454,160 @@ v_screen_partition_4se_b32_e64 v5, v1
 v_screen_partition_4se_b32_e64 v5, -1
 // GXF9: [0x05,0x00,0x77,0xd1,0xc1,0x00,0x00,0x00]
 // NOVI: error: instruction not supported on this GPU
+
+v_add_u32 v84, v13, s31 clamp
+// GFX9: v_add_u32_e64 v84, v13, s31 clamp ; encoding: [0x54,0x80,0x34,0xd1,0x0d,0x3f,0x00,0x00]
+// NOVI: error:
+
+v_sub_u32 v84, v13, s31 clamp
+// GFX9: v_sub_u32_e64 v84, v13, s31 clamp ; encoding: [0x54,0x80,0x35,0xd1,0x0d,0x3f,0x00,0x00]
+// NOVI: error:
+
+v_subrev_u32 v84, v13, s31 clamp
+// GFX9: v_subrev_u32_e64 v84, v13, s31 clamp ; encoding: [0x54,0x80,0x36,0xd1,0x0d,0x3f,0x00,0x00]
+// NOVI: error:
+
+v_addc_co_u32 v84, s[4:5], v13, v31, vcc clamp
+// GFX9: v_addc_co_u32_e64 v84, s[4:5], v13, v31, vcc clamp ; encoding: [0x54,0x84,0x1c,0xd1,0x0d,0x3f,0xaa,0x01]
+// NOVI: error:
+
+v_subb_co_u32 v84, s[2:3], v13, v31, vcc clamp
+// GFX9: v_subb_co_u32_e64 v84, s[2:3], v13, v31, vcc clamp ; encoding: [0x54,0x82,0x1d,0xd1,0x0d,0x3f,0xaa,0x01]
+// NOVI: error:
+
+v_subbrev_co_u32 v84, vcc, v13, v31, s[6:7] clamp
+// GFX9: v_subbrev_co_u32_e64 v84, vcc, v13, v31, s[6:7] clamp ; encoding: [0x54,0xea,0x1e,0xd1,0x0d,0x3f,0x1a,0x00]
+// NOVI: error:
+
+v_add_co_u32 v84, s[4:5], v13, v31 clamp
+// GFX9: v_add_co_u32_e64 v84, s[4:5], v13, v31 clamp ; encoding: [0x54,0x84,0x19,0xd1,0x0d,0x3f,0x02,0x00]
+// NOVI: error:
+
+v_sub_co_u32 v84, s[2:3], v13, v31 clamp
+// GFX9: v_sub_co_u32_e64 v84, s[2:3], v13, v31 clamp ; encoding: [0x54,0x82,0x1a,0xd1,0x0d,0x3f,0x02,0x00]
+// NOVI: error:
+
+v_subrev_co_u32 v84, vcc, v13, v31 clamp
+// GFX9: v_subrev_co_u32_e64 v84, vcc, v13, v31 clamp ; encoding: [0x54,0xea,0x1b,0xd1,0x0d,0x3f,0x02,0x00]
+// NOVI: error:
+
+v_addc_co_u32 v84, vcc, v13, v31, vcc
+// GFX9: v_addc_co_u32_e32 v84, vcc, v13, v31, vcc ; encoding: [0x0d,0x3f,0xa8,0x38]
+// NOVI: error: instruction not supported on this GPU
+
+v_subb_co_u32 v84, vcc, v13, v31, vcc
+// GFX9: v_subb_co_u32_e32 v84, vcc, v13, v31, vcc ; encoding: [0x0d,0x3f,0xa8,0x3a]
+// NOVI: error: instruction not supported on this GPU
+
+v_subbrev_co_u32 v84, vcc, v13, v31, vcc
+// GFX9: v_subbrev_co_u32_e32 v84, vcc, v13, v31, vcc ; encoding: [0x0d,0x3f,0xa8,0x3c]
+// NOVI: error: instruction not supported on this GPU
+
+v_add_co_u32 v84, vcc, v13, v31
+// GFX9: v_add_co_u32_e32 v84, vcc, v13, v31 ; encoding: [0x0d,0x3f,0xa8,0x32]
+// NOVI: error: instruction not supported on this GPU
+
+v_sub_co_u32 v84, vcc, v13, v31
+// GFX9: v_sub_co_u32_e32 v84, vcc, v13, v31 ; encoding: [0x0d,0x3f,0xa8,0x34]
+// NOVI: error: instruction not supported on this GPU
+
+v_subrev_co_u32 v84, vcc, v13, v31
+// GFX9: v_subrev_co_u32_e32 v84, vcc, v13, v31 ; encoding: [0x0d,0x3f,0xa8,0x36]
+// NOVI: error: instruction not supported on this GPU
+
+v_add_i32 v1, v2, v3
+// GFX9: v_add_i32 v1, v2, v3 ; encoding: [0x01,0x00,0x9c,0xd2,0x02,0x07,0x02,0x00]
+// NOVI: error: instruction not supported on this GPU
+
+v_add_i32 v1, v2, v3 clamp
+// GFX9: v_add_i32 v1, v2, v3 clamp ; encoding: [0x01,0x80,0x9c,0xd2,0x02,0x07,0x02,0x00]
+// NOVI: error: invalid operand for instruction
+
+v_sub_i32 v1, v2, v3
+// GFX9: v_sub_i32 v1, v2, v3 ; encoding: [0x01,0x00,0x9d,0xd2,0x02,0x07,0x02,0x00]
+// NOVI: error: instruction not supported on this GPU
+
+v_sub_i32 v1, v2, v3 clamp
+// GFX9: v_sub_i32 v1, v2, v3 clamp ; encoding: [0x01,0x80,0x9d,0xd2,0x02,0x07,0x02,0x00]
+// NOVI: error: invalid operand for instruction
+
+//===----------------------------------------------------------------------===//
+// Validate register size checks (bug 37943)
+//===----------------------------------------------------------------------===//
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f64 v[0:1], s0, v[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f64 v[0:1], s[0:3], v[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f64 v[0:1], v0, v[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f64 v[0:1], v[0:2], v[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f64 v[0:1], v[0:3], v[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f64 v[0:1], v[0:1], v0
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f64 v[0:1], v[0:1], s0
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f32 v0, s[0:1], v0
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f32 v0, v[0:1], v0
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f32 v0, v0, s[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f32 v0, v0, v[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f16 v0, s[0:1], v0
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f16 v0, v[0:1], v0
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f16 v0, v0, s[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_f16 v0, v0, v[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_u16 v0, s[0:1], v0
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_u16 v0, v[0:1], v0
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_u16 v0, v0, s[0:1]
+
+// NOVI: error: invalid operand for instruction
+// NOGFX9: error: invalid operand for instruction
+v_add_u16 v0, v0, v[0:1]
+

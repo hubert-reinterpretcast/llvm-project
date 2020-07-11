@@ -1,4 +1,4 @@
-//===-- GDBRemoteClientBaseTest.cpp -----------------------------*- C++ -*-===//
+//===-- GDBRemoteClientBaseTest.cpp ---------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,7 +12,7 @@
 #include "Plugins/Process/Utility/LinuxSignals.h"
 #include "Plugins/Process/gdb-remote/GDBRemoteClientBase.h"
 #include "Plugins/Process/gdb-remote/GDBRemoteCommunicationServer.h"
-#include "lldb/Utility/StreamGDBRemote.h"
+#include "lldb/Utility/GDBRemote.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Testing/Support/Error.h"
 
@@ -29,12 +29,12 @@ struct MockDelegate : public GDBRemoteClientBase::ContinueDelegate {
   unsigned stop_reply_called = 0;
   std::vector<std::string> structured_data_packets;
 
-  void HandleAsyncStdout(llvm::StringRef out) { output += out; }
-  void HandleAsyncMisc(llvm::StringRef data) { misc_data += data; }
-  void HandleStopReply() { ++stop_reply_called; }
+  void HandleAsyncStdout(llvm::StringRef out) override { output += out; }
+  void HandleAsyncMisc(llvm::StringRef data) override { misc_data += data; }
+  void HandleStopReply() override { ++stop_reply_called; }
 
-  void HandleAsyncStructuredDataPacket(llvm::StringRef data) {
-    structured_data_packets.push_back(data);
+  void HandleAsyncStructuredDataPacket(llvm::StringRef data) override {
+    structured_data_packets.push_back(std::string(data));
   }
 };
 

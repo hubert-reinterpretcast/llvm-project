@@ -1,4 +1,4 @@
-//===-- LibCxxUnorderedMap.cpp ----------------------------------*- C++ -*-===//
+//===-- LibCxxUnorderedMap.cpp --------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -8,10 +8,10 @@
 
 #include "LibCxx.h"
 
+#include "Plugins/TypeSystem/Clang/TypeSystemClang.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/DataFormatters/FormattersHelpers.h"
-#include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/Endian.h"
@@ -39,7 +39,7 @@ public:
 
   bool MightHaveChildren() override;
 
-  size_t GetIndexOfChildWithName(const ConstString &name) override;
+  size_t GetIndexOfChildWithName(ConstString name) override;
 
 private:
   CompilerType m_element_type;
@@ -209,7 +209,7 @@ bool lldb_private::formatters::LibcxxStdUnorderedMapSyntheticFrontEnd::
 }
 
 size_t lldb_private::formatters::LibcxxStdUnorderedMapSyntheticFrontEnd::
-    GetIndexOfChildWithName(const ConstString &name) {
+    GetIndexOfChildWithName(ConstString name) {
   return ExtractIndexFromString(name.GetCString());
 }
 

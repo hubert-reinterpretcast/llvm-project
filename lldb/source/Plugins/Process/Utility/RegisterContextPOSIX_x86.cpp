@@ -1,4 +1,4 @@
-//===-- RegisterContextPOSIX_x86.cpp ----------------------------*- C++ -*-===//
+//===-- RegisterContextPOSIX_x86.cpp --------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -423,7 +423,7 @@ RegisterContextPOSIX_x86::GetRegisterInfoAtIndex(size_t reg) {
   if (reg < m_reg_info.num_registers)
     return &GetRegisterInfo()[reg];
   else
-    return NULL;
+    return nullptr;
 }
 
 size_t RegisterContextPOSIX_x86::GetRegisterSetCount() {
@@ -445,26 +445,15 @@ const RegisterSet *RegisterContextPOSIX_x86::GetRegisterSet(size_t set) {
       return &g_reg_sets_x86_64[set];
     default:
       assert(false && "Unhandled target architecture.");
-      return NULL;
+      return nullptr;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 const char *RegisterContextPOSIX_x86::GetRegisterName(unsigned reg) {
   assert(reg < m_reg_info.num_registers && "Invalid register offset.");
   return GetRegisterInfo()[reg].name;
-}
-
-lldb::ByteOrder RegisterContextPOSIX_x86::GetByteOrder() {
-  // Get the target process whose privileged thread was used for the register
-  // read.
-  lldb::ByteOrder byte_order = eByteOrderInvalid;
-  Process *process = CalculateProcess().get();
-
-  if (process)
-    byte_order = process->GetByteOrder();
-  return byte_order;
 }
 
 // Parse ymm registers and into xmm.bytes and ymmh.bytes.
@@ -474,22 +463,13 @@ bool RegisterContextPOSIX_x86::CopyYMMtoXSTATE(uint32_t reg,
     return false;
 
   if (byte_order == eByteOrderLittle) {
-    ::memcpy(m_fpr.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
-             m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes, sizeof(XMMReg));
-    ::memcpy(m_fpr.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
-             m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes + sizeof(XMMReg),
-             sizeof(YMMHReg));
+    uint32_t reg_no = reg - m_reg_info.first_ymm;
+    YMMToXState(m_ymm_set.ymm[reg_no],
+        m_fpr.fxsave.xmm[reg_no].bytes,
+        m_fpr.xsave.ymmh[reg_no].bytes);
     return true;
   }
 
-  if (byte_order == eByteOrderBig) {
-    ::memcpy(m_fpr.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
-             m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes + sizeof(XMMReg),
-             sizeof(XMMReg));
-    ::memcpy(m_fpr.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
-             m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes, sizeof(YMMHReg));
-    return true;
-  }
   return false; // unsupported or invalid byte order
 }
 
@@ -500,24 +480,13 @@ bool RegisterContextPOSIX_x86::CopyXSTATEtoYMM(uint32_t reg,
     return false;
 
   if (byte_order == eByteOrderLittle) {
-    ::memcpy(m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes,
-             m_fpr.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
-             sizeof(XMMReg));
-    ::memcpy(m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes + sizeof(XMMReg),
-             m_fpr.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
-             sizeof(YMMHReg));
+    uint32_t reg_no = reg - m_reg_info.first_ymm;
+    m_ymm_set.ymm[reg_no] = XStateToYMM(
+        m_fpr.fxsave.xmm[reg_no].bytes,
+        m_fpr.xsave.ymmh[reg_no].bytes);
     return true;
   }
 
-  if (byte_order == eByteOrderBig) {
-    ::memcpy(m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes + sizeof(XMMReg),
-             m_fpr.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
-             sizeof(XMMReg));
-    ::memcpy(m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes,
-             m_fpr.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
-             sizeof(YMMHReg));
-    return true;
-  }
   return false; // unsupported or invalid byte order
 }
 
@@ -528,21 +497,4 @@ bool RegisterContextPOSIX_x86::IsRegisterSetAvailable(size_t set_index) {
   if (GetFPRType() == eXSAVE) // ...and to start with AVX registers.
     ++num_sets;
   return (set_index < num_sets);
-}
-
-// Used when parsing DWARF and EH frame information and any other object file
-// sections that contain register numbers in them.
-uint32_t RegisterContextPOSIX_x86::ConvertRegisterKindToRegisterNumber(
-    lldb::RegisterKind kind, uint32_t num) {
-  const uint32_t num_regs = GetRegisterCount();
-
-  assert(kind < kNumRegisterKinds);
-  for (uint32_t reg_idx = 0; reg_idx < num_regs; ++reg_idx) {
-    const RegisterInfo *reg_info = GetRegisterInfoAtIndex(reg_idx);
-
-    if (reg_info->kinds[kind] == num)
-      return reg_idx;
-  }
-
-  return LLDB_INVALID_REGNUM;
 }

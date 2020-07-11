@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_PlatformAndroid_h_
-#define liblldb_PlatformAndroid_h_
+#ifndef LLDB_SOURCE_PLUGINS_PLATFORM_ANDROID_PLATFORMANDROID_H
+#define LLDB_SOURCE_PLUGINS_PLATFORM_ANDROID_PLATFORMANDROID_H
 
 #include <memory>
 #include <string>
@@ -29,9 +29,7 @@ public:
 
   static void Terminate();
 
-  //------------------------------------------------------------
   // lldb_private::PluginInterface functions
-  //------------------------------------------------------------
   static lldb::PlatformSP CreateInstance(bool force, const ArchSpec *arch);
 
   static ConstString GetPluginNameStatic(bool is_host);
@@ -42,9 +40,7 @@ public:
 
   uint32_t GetPluginVersion() override { return 1; }
 
-  //------------------------------------------------------------
   // lldb_private::Platform functions
-  //------------------------------------------------------------
 
   Status ConnectRemote(Args &args) override;
 
@@ -81,10 +77,11 @@ private:
   std::string m_device_id;
   uint32_t m_sdk_version;
 
-  DISALLOW_COPY_AND_ASSIGN(PlatformAndroid);
+  PlatformAndroid(const PlatformAndroid &) = delete;
+  const PlatformAndroid &operator=(const PlatformAndroid &) = delete;
 };
 
 } // namespace platofor_android
 } // namespace lldb_private
 
-#endif // liblldb_PlatformAndroid_h_
+#endif // LLDB_SOURCE_PLUGINS_PLATFORM_ANDROID_PLATFORMANDROID_H

@@ -1,3 +1,3 @@
 :orphan:
-
-All :program:`clangd` documentation was moved to the :doc:`clangd/index` pages.
+:template: clangd_redirect.html
+:redirect_target: https://clangd.llvm.org/

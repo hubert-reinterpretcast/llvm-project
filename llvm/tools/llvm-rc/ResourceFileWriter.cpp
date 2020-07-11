@@ -11,11 +11,11 @@
 //===---------------------------------------------------------------------===//
 
 #include "ResourceFileWriter.h"
-
 #include "llvm/Object/WindowsResource.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/EndianStream.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
@@ -722,7 +722,7 @@ Error ResourceFileWriter::writeBitmapBody(const RCResource *Base) {
 
 // --- CursorResource and IconResource helpers. --- //
 
-// ICONRESDIR structure. Describes a single icon in resouce group.
+// ICONRESDIR structure. Describes a single icon in resource group.
 //
 // Ref: msdn.microsoft.com/en-us/library/windows/desktop/ms648016.aspx
 struct IconResDir {
@@ -1180,8 +1180,10 @@ Error ResourceFileWriter::writeMenuDefinition(
 
   if (auto *MenuItemPtr = dyn_cast<MenuItem>(DefPtr)) {
     writeInt<uint16_t>(Flags);
-    RETURN_IF_ERROR(
-        checkNumberFits<uint16_t>(MenuItemPtr->Id, "MENUITEM action ID"));
+    // Some resource files use -1, i.e. UINT32_MAX, for empty menu items.
+    if (MenuItemPtr->Id != static_cast<uint32_t>(-1))
+      RETURN_IF_ERROR(
+          checkNumberFits<uint16_t>(MenuItemPtr->Id, "MENUITEM action ID"));
     writeInt<uint16_t>(MenuItemPtr->Id);
     RETURN_IF_ERROR(writeCString(MenuItemPtr->Name));
     return Error::success();

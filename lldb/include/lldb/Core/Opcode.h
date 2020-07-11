@@ -6,30 +6,25 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_Opcode_h
-#define lldb_Opcode_h
+#ifndef LLDB_CORE_OPCODE_H
+#define LLDB_CORE_OPCODE_H
 
 #include "lldb/Utility/Endian.h"
 #include "lldb/lldb-enumerations.h"
 
-#include "llvm/Support/MathExtras.h"
+#include "llvm/Support/SwapByteOrder.h"
 
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
-
-namespace lldb_private {
-class DataExtractor;
-}
-namespace lldb_private {
-class Stream;
-}
 
 namespace lldb {
 class SBInstruction;
 }
 
 namespace lldb_private {
+class DataExtractor;
+class Stream;
 
 class Opcode {
 public:
@@ -275,4 +270,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // lldb_Opcode_h
+#endif // LLDB_CORE_OPCODE_H

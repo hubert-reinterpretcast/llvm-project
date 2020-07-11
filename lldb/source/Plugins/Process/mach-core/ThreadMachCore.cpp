@@ -1,4 +1,4 @@
-//===-- ThreadMachCore.cpp --------------------------------------*- C++ -*-===//
+//===-- ThreadMachCore.cpp ------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -28,9 +28,7 @@
 using namespace lldb;
 using namespace lldb_private;
 
-//----------------------------------------------------------------------
 // Thread Registers
-//----------------------------------------------------------------------
 
 ThreadMachCore::ThreadMachCore(Process &process, lldb::tid_t tid)
     : Thread(process, tid), m_thread_name(), m_dispatch_queue_name(),
@@ -85,9 +83,7 @@ ThreadMachCore::CreateRegisterContextForFrame(StackFrame *frame) {
     }
     reg_ctx_sp = m_thread_reg_ctx_sp;
   } else {
-    Unwind *unwinder = GetUnwinder();
-    if (unwinder != nullptr)
-      reg_ctx_sp = unwinder->CreateRegisterContextForFrame(frame);
+    reg_ctx_sp = GetUnwinder().CreateRegisterContextForFrame(frame);
   }
   return reg_ctx_sp;
 }

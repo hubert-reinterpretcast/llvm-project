@@ -16,11 +16,11 @@ Contents
    :maxdepth: 2
 
    clang-tidy/index
-   include-fixer
+   clang-include-fixer
    modularize
    pp-trace
    clang-rename
-   clangd/index
+   clangd <https://clangd.llvm.org/>
    clang-doc
 
 

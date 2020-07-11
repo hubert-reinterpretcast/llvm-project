@@ -17,6 +17,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/MapVector.h"
+#include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/DbgEntityHistoryCalculator.h"
@@ -100,7 +101,7 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
 
   struct CVGlobalVariable {
     const DIGlobalVariable *DIGV;
-    const GlobalVariable *GV;
+    PointerUnion<const GlobalVariable *, const DIExpression *> GVInfo;
   };
 
   struct InlineSite {
@@ -147,6 +148,8 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
     SmallVector<LexicalBlock *, 1> ChildBlocks;
 
     std::vector<std::pair<MCSymbol *, MDNode *>> Annotations;
+    std::vector<std::tuple<const MCSymbol *, const MCSymbol *, const DIType *>>
+        HeapAllocSites;
 
     const MCSymbol *Begin = nullptr;
     const MCSymbol *End = nullptr;
@@ -222,7 +225,7 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   codeview::TypeIndex getFuncIdForSubprogram(const DISubprogram *SP);
 
   void calculateRanges(LocalVariable &Var,
-                       const DbgValueHistoryMap::InstrRanges &Ranges);
+                       const DbgValueHistoryMap::Entries &Entries);
 
   static void collectInlineSiteChildren(SmallVectorImpl<unsigned> &Children,
                                         const FunctionInfo &FI,
@@ -307,13 +310,12 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
 
   void emitDebugInfoForRetainedTypes();
 
-  void
-  emitDebugInfoForUDTs(ArrayRef<std::pair<std::string, const DIType *>> UDTs);
+  void emitDebugInfoForUDTs(
+      const std::vector<std::pair<std::string, const DIType *>> &UDTs);
 
   void emitDebugInfoForGlobals();
   void emitGlobalVariableList(ArrayRef<CVGlobalVariable> Globals);
-  void emitDebugInfoForGlobal(const DIGlobalVariable *DIGV,
-                              const GlobalVariable *GV, MCSymbol *GVSym);
+  void emitDebugInfoForGlobal(const CVGlobalVariable &CVGV);
 
   /// Opens a subsection of the given kind in a .debug$S codeview section.
   /// Returns an end label for use with endCVSubsection when the subsection is
@@ -372,14 +374,14 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
 
   /// Translates the DIType to codeview if necessary and returns a type index
   /// for it.
-  codeview::TypeIndex getTypeIndex(DITypeRef TypeRef,
-                                   DITypeRef ClassTyRef = DITypeRef());
+  codeview::TypeIndex getTypeIndex(const DIType *Ty,
+                                   const DIType *ClassTy = nullptr);
 
   codeview::TypeIndex
   getTypeIndexForThisPtr(const DIDerivedType *PtrTy,
                          const DISubroutineType *SubroutineTy);
 
-  codeview::TypeIndex getTypeIndexForReferenceTo(DITypeRef TypeRef);
+  codeview::TypeIndex getTypeIndexForReferenceTo(const DIType *Ty);
 
   codeview::TypeIndex getMemberFunctionType(const DISubprogram *SP,
                                             const DICompositeType *Class);
@@ -418,7 +420,7 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   /// use this entry point when generating symbol records. The complete and
   /// incomplete type indices only differ for record types. All other types use
   /// the same index.
-  codeview::TypeIndex getCompleteTypeIndex(DITypeRef TypeRef);
+  codeview::TypeIndex getCompleteTypeIndex(const DIType *Ty);
 
   codeview::TypeIndex lowerCompleteTypeClass(const DICompositeType *Ty);
   codeview::TypeIndex lowerCompleteTypeUnion(const DICompositeType *Ty);
@@ -440,6 +442,15 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   codeview::TypeIndex recordTypeIndexForDINode(const DINode *Node,
                                                codeview::TypeIndex TI,
                                                const DIType *ClassTy = nullptr);
+
+  /// Collect the names of parent scopes, innermost to outermost. Return the
+  /// innermost subprogram scope if present. Ensure that parent type scopes are
+  /// inserted into the type table.
+  const DISubprogram *
+  collectParentScopeNames(const DIScope *Scope,
+                          SmallVectorImpl<StringRef> &ParentScopeNames);
+  std::string getFullyQualifiedName(const DIScope *Scope, StringRef Name);
+  std::string getFullyQualifiedName(const DIScope *Scope);
 
   unsigned getPointerSizeInBytes();
 

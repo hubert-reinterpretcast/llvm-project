@@ -9,7 +9,7 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_FUCHSIA_TRAILING_RETURN_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_FUCHSIA_TRAILING_RETURN_H
 
-#include "../ClangTidy.h"
+#include "../ClangTidyCheck.h"
 
 namespace clang {
 namespace tidy {
@@ -25,6 +25,9 @@ class TrailingReturnCheck : public ClangTidyCheck {
 public:
   TrailingReturnCheck(StringRef Name, ClangTidyContext *Context)
       : ClangTidyCheck(Name, Context) {}
+  bool isLanguageVersionSupported(const LangOptions &LangOpts) const override {
+    return LangOpts.CPlusPlus11;
+  }
   void registerMatchers(ast_matchers::MatchFinder *Finder) override;
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override;
 };

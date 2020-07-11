@@ -108,8 +108,10 @@ public:
   /// \param LockName -- A StringRef name for the lock expression, to be printed
   /// in the error message.
   /// \param Loc -- The SourceLocation of the Unlock
+  /// \param LocPreviousUnlock -- If valid, the location of a previous Unlock.
   virtual void handleUnmatchedUnlock(StringRef Kind, Name LockName,
-                                     SourceLocation Loc) {}
+                                     SourceLocation Loc,
+                                     SourceLocation LocPreviousUnlock) {}
 
   /// Warn about an unlock function call that attempts to unlock a lock with
   /// the incorrect lock kind. For instance, a shared lock being unlocked
@@ -119,19 +121,22 @@ public:
   /// \param Kind -- the capability's name parameter (role, mutex, etc).
   /// \param Expected -- the kind of lock expected.
   /// \param Received -- the kind of lock received.
-  /// \param Loc -- The SourceLocation of the Unlock.
+  /// \param LocLocked -- The SourceLocation of the Lock.
+  /// \param LocUnlock -- The SourceLocation of the Unlock.
   virtual void handleIncorrectUnlockKind(StringRef Kind, Name LockName,
                                          LockKind Expected, LockKind Received,
-                                         SourceLocation Loc) {}
+                                         SourceLocation LocLocked,
+                                         SourceLocation LocUnlock) {}
 
   /// Warn about lock function calls for locks which are already held.
   /// \param Kind -- the capability's name parameter (role, mutex, etc).
   /// \param LockName -- A StringRef name for the lock expression, to be printed
   /// in the error message.
   /// \param LocLocked -- The location of the first lock expression.
-  /// \param Loc -- The location of the second lock expression.
+  /// \param LocDoubleLock -- The location of the second lock expression.
   virtual void handleDoubleLock(StringRef Kind, Name LockName,
-                                SourceLocation LocLocked, SourceLocation Loc) {}
+                                SourceLocation LocLocked,
+                                SourceLocation LocDoubleLock) {}
 
   /// Warn about situations where a mutex is sometimes held and sometimes not.
   /// The three situations are:

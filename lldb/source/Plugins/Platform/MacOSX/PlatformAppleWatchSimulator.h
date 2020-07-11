@@ -6,16 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_PlatformAppleWatchSimulator_h_
-#define liblldb_PlatformAppleWatchSimulator_h_
+#ifndef LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMAPPLEWATCHSIMULATOR_H
+#define LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMAPPLEWATCHSIMULATOR_H
 
-#include "PlatformDarwin.h"
+#include "PlatformAppleSimulator.h"
 
-class PlatformAppleWatchSimulator : public PlatformDarwin {
+class PlatformAppleWatchSimulator : public PlatformAppleSimulator {
 public:
-  //------------------------------------------------------------
   // Class Functions
-  //------------------------------------------------------------
   static lldb::PlatformSP CreateInstance(bool force,
                                          const lldb_private::ArchSpec *arch);
 
@@ -27,25 +25,19 @@ public:
 
   static const char *GetDescriptionStatic();
 
-  //------------------------------------------------------------
   // Class Methods
-  //------------------------------------------------------------
   PlatformAppleWatchSimulator();
 
   virtual ~PlatformAppleWatchSimulator();
 
-  //------------------------------------------------------------
   // lldb_private::PluginInterface functions
-  //------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override {
     return GetPluginNameStatic();
   }
 
   uint32_t GetPluginVersion() override { return 1; }
 
-  //------------------------------------------------------------
   // lldb_private::Platform functions
-  //------------------------------------------------------------
   lldb_private::Status ResolveExecutable(
       const lldb_private::ModuleSpec &module_spec, lldb::ModuleSP &module_sp,
       const lldb_private::FileSpecList *module_search_paths_ptr) override;
@@ -77,7 +69,7 @@ public:
   AddClangModuleCompilationOptions(lldb_private::Target *target,
                                    std::vector<std::string> &options) override {
     return PlatformDarwin::AddClangModuleCompilationOptionsForSDKType(
-        target, options, PlatformDarwin::SDKType::iPhoneSimulator);
+        target, options, lldb_private::XcodeSDK::Type::iPhoneSimulator);
   }
 
 protected:
@@ -85,10 +77,12 @@ protected:
   std::string m_sdk_directory;
   std::string m_build_update;
 
-  const char *GetSDKDirectoryAsCString();
+  llvm::StringRef GetSDKDirectoryAsCString();
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(PlatformAppleWatchSimulator);
+  PlatformAppleWatchSimulator(const PlatformAppleWatchSimulator &) = delete;
+  const PlatformAppleWatchSimulator &
+  operator=(const PlatformAppleWatchSimulator &) = delete;
 };
 
-#endif // liblldb_PlatformAppleWatchSimulator_h_
+#endif // LLDB_SOURCE_PLUGINS_PLATFORM_MACOSX_PLATFORMAPPLEWATCHSIMULATOR_H

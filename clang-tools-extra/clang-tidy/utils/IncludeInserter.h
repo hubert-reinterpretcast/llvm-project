@@ -21,7 +21,7 @@ namespace clang {
 namespace tidy {
 namespace utils {
 
-/// \brief Produces fixes to insert specified includes to source files, if not
+/// Produces fixes to insert specified includes to source files, if not
 /// yet present.
 ///
 /// ``IncludeInserter`` can be used in clang-tidy checks in the following way:
@@ -31,11 +31,11 @@ namespace utils {
 ///
 /// class MyCheck : public ClangTidyCheck {
 ///  public:
-///   void registerPPCallbacks(CompilerInstance& Compiler) override {
-///     Inserter = llvm::make_unique<IncludeInserter>(&Compiler.getSourceManager(),
-///                                                   &Compiler.getLangOpts());
-///     Compiler.getPreprocessor().addPPCallbacks(
-///         Inserter->CreatePPCallbacks());
+///   void registerPPCallbacks(const SourceManager &SM, Preprocessor *PP,
+///                            Preprocessor *ModuleExpanderPP) override {
+///     Inserter = std::make_unique<IncludeInserter>(
+///         SM, getLangOpts(), utils::IncludeSorter::IS_Google);
+///     PP->addPPCallbacks(Inserter->CreatePPCallbacks());
 ///   }
 ///
 ///   void registerMatchers(ast_matchers::MatchFinder* Finder) override { ... }
@@ -71,10 +71,11 @@ private:
   void AddInclude(StringRef FileName, bool IsAngled,
                   SourceLocation HashLocation, SourceLocation EndLocation);
 
+  IncludeSorter &getOrCreate(FileID FileID);
+
   llvm::DenseMap<FileID, std::unique_ptr<IncludeSorter>> IncludeSorterByFile;
   llvm::DenseMap<FileID, std::set<std::string>> InsertedHeaders;
   const SourceManager &SourceMgr;
-  const LangOptions &LangOpts;
   const IncludeSorter::IncludeStyle Style;
   friend class IncludeInserterCallback;
 };

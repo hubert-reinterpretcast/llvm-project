@@ -24,6 +24,7 @@
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -43,7 +44,7 @@ static cl::opt<FunctionNameKind> ClPrintFunctions(
                clEnumValN(FunctionNameKind::ShortName, "short",
                           "print short function name"),
                clEnumValN(FunctionNameKind::LinkageName, "linkage",
-                          "print function linkage name (default)"),
+                          "print function linkage name"),
                // Sentinel value for unspecified value.
                clEnumValN(FunctionNameKind::LinkageName, "", "")));
 static cl::alias ClPrintFunctionsShort("f", cl::desc("Alias for -functions"),
@@ -54,6 +55,10 @@ static cl::opt<bool>
     ClUseRelativeAddress("relative-address", cl::init(false),
                          cl::desc("Interpret addresses as relative addresses"),
                          cl::ReallyHidden);
+
+static cl::opt<bool> ClUntagAddresses(
+    "untag-addresses", cl::init(true),
+    cl::desc("Remove memory tags from addresses before symbolization"));
 
 static cl::opt<bool>
     ClPrintInlining("inlining", cl::init(true),
@@ -66,13 +71,15 @@ static cl::alias
     ClPrintInliningAliasInlines("inlines", cl::desc("Alias for -inlining"),
                                 cl::NotHidden, cl::aliasopt(ClPrintInlining));
 
-// -basenames, -s
 static cl::opt<bool> ClBasenames("basenames", cl::init(false),
                                  cl::desc("Strip directory names from paths"));
 static cl::alias ClBasenamesShort("s", cl::desc("Alias for -basenames"),
                                   cl::NotHidden, cl::aliasopt(ClBasenames));
 
-// -demangle, -C, -no-demangle
+static cl::opt<bool>
+    ClRelativenames("relativenames", cl::init(false),
+                    cl::desc("Strip the compilation directory from paths"));
+
 static cl::opt<bool>
 ClDemangle("demangle", cl::init(true), cl::desc("Demangle function names"));
 static cl::alias
@@ -86,7 +93,6 @@ static cl::opt<std::string> ClDefaultArch("default-arch", cl::init(""),
                                           cl::desc("Default architecture "
                                                    "(for multi-arch objects)"));
 
-// -obj, -exe, -e
 static cl::opt<std::string>
 ClBinaryName("obj", cl::init(""),
              cl::desc("Path to object file to be symbolized (if not provided, "
@@ -94,10 +100,9 @@ ClBinaryName("obj", cl::init(""),
 static cl::alias
 ClBinaryNameAliasExe("exe", cl::desc("Alias for -obj"),
                      cl::NotHidden, cl::aliasopt(ClBinaryName));
-static cl::alias
-ClBinaryNameAliasE("e", cl::desc("Alias for -obj"),
-                   cl::NotHidden, cl::aliasopt(ClBinaryName));
-
+static cl::alias ClBinaryNameAliasE("e", cl::desc("Alias for -obj"),
+                                    cl::NotHidden, cl::Grouping, cl::Prefix,
+                                    cl::aliasopt(ClBinaryName));
 
 static cl::opt<std::string>
     ClDwpName("dwp", cl::init(""),
@@ -108,7 +113,6 @@ ClDsymHint("dsym-hint", cl::ZeroOrMore,
            cl::desc("Path to .dSYM bundles to search for debug info for the "
                     "object files"));
 
-// -print-address, -addresses, -a
 static cl::opt<bool>
 ClPrintAddress("print-address", cl::init(false),
                cl::desc("Show address before line information"));
@@ -119,7 +123,6 @@ static cl::alias
 ClPrintAddressAliasA("a", cl::desc("Alias for -print-address"),
                      cl::NotHidden, cl::aliasopt(ClPrintAddress), cl::Grouping);
 
-// -pretty-print, -p
 static cl::opt<bool>
     ClPrettyPrint("pretty-print", cl::init(false),
                   cl::desc("Make the output more human friendly"));
@@ -134,8 +137,7 @@ static cl::opt<int> ClPrintSourceContextLines(
 static cl::opt<bool> ClVerbose("verbose", cl::init(false),
                                cl::desc("Print verbose line info"));
 
-// -adjust-vma
-static cl::opt<unsigned long long>
+static cl::opt<uint64_t>
     ClAdjustVMA("adjust-vma", cl::init(0), cl::value_desc("offset"),
                 cl::desc("Add specified offset to object file addresses"));
 
@@ -147,6 +149,27 @@ static cl::opt<std::string>
     ClFallbackDebugPath("fallback-debug-path", cl::init(""),
                         cl::desc("Fallback path for debug binaries."));
 
+static cl::list<std::string>
+    ClDebugFileDirectory("debug-file-directory", cl::ZeroOrMore,
+                         cl::value_desc("dir"),
+                         cl::desc("Path to directory where to look for debug "
+                                  "files."));
+
+static cl::opt<DIPrinter::OutputStyle>
+    ClOutputStyle("output-style", cl::init(DIPrinter::OutputStyle::LLVM),
+                  cl::desc("Specify print style"),
+                  cl::values(clEnumValN(DIPrinter::OutputStyle::LLVM, "LLVM",
+                                        "LLVM default style"),
+                             clEnumValN(DIPrinter::OutputStyle::GNU, "GNU",
+                                        "GNU addr2line style")));
+
+static cl::opt<bool>
+    ClUseNativePDBReader("use-native-pdb-reader", cl::init(0),
+                         cl::desc("Use native PDB functionality"));
+
+static cl::extrahelp
+    HelpResponse("\nPass @FILE as argument to read options from FILE.\n");
+
 template<typename T>
 static bool error(Expected<T> &ResOrErr) {
   if (ResOrErr)
@@ -156,90 +179,152 @@ static bool error(Expected<T> &ResOrErr) {
   return true;
 }
 
-static bool parseCommand(StringRef InputString, bool &IsData,
+enum class Command {
+  Code,
+  Data,
+  Frame,
+};
+
+static bool parseCommand(bool IsAddr2Line, StringRef InputString, Command &Cmd,
                          std::string &ModuleName, uint64_t &ModuleOffset) {
   const char kDelimiters[] = " \n\r";
   ModuleName = "";
   if (InputString.consume_front("CODE ")) {
-    IsData = false;
+    Cmd = Command::Code;
   } else if (InputString.consume_front("DATA ")) {
-    IsData = true;
+    Cmd = Command::Data;
+  } else if (InputString.consume_front("FRAME ")) {
+    Cmd = Command::Frame;
   } else {
     // If no cmd, assume it's CODE.
-    IsData = false;
+    Cmd = Command::Code;
   }
-  const char *pos = InputString.data();
+  const char *Pos = InputString.data();
   // Skip delimiters and parse input filename (if needed).
   if (ClBinaryName.empty()) {
-    pos += strspn(pos, kDelimiters);
-    if (*pos == '"' || *pos == '\'') {
-      char quote = *pos;
-      pos++;
-      const char *end = strchr(pos, quote);
-      if (!end)
+    Pos += strspn(Pos, kDelimiters);
+    if (*Pos == '"' || *Pos == '\'') {
+      char Quote = *Pos;
+      Pos++;
+      const char *End = strchr(Pos, Quote);
+      if (!End)
         return false;
-      ModuleName = std::string(pos, end - pos);
-      pos = end + 1;
+      ModuleName = std::string(Pos, End - Pos);
+      Pos = End + 1;
     } else {
-      int name_length = strcspn(pos, kDelimiters);
-      ModuleName = std::string(pos, name_length);
-      pos += name_length;
+      int NameLength = strcspn(Pos, kDelimiters);
+      ModuleName = std::string(Pos, NameLength);
+      Pos += NameLength;
     }
   } else {
     ModuleName = ClBinaryName;
   }
   // Skip delimiters and parse module offset.
-  pos += strspn(pos, kDelimiters);
-  int offset_length = strcspn(pos, kDelimiters);
-  return !StringRef(pos, offset_length).getAsInteger(0, ModuleOffset);
+  Pos += strspn(Pos, kDelimiters);
+  int OffsetLength = strcspn(Pos, kDelimiters);
+  StringRef Offset(Pos, OffsetLength);
+  // GNU addr2line assumes the offset is hexadecimal and allows a redundant
+  // "0x" or "0X" prefix; do the same for compatibility.
+  if (IsAddr2Line)
+    Offset.consume_front("0x") || Offset.consume_front("0X");
+  return !Offset.getAsInteger(IsAddr2Line ? 16 : 0, ModuleOffset);
 }
 
-static void symbolizeInput(StringRef InputString, LLVMSymbolizer &Symbolizer,
-                           DIPrinter &Printer) {
-  bool IsData = false;
+static void symbolizeInput(bool IsAddr2Line, StringRef InputString,
+                           LLVMSymbolizer &Symbolizer, DIPrinter &Printer) {
+  Command Cmd;
   std::string ModuleName;
-  uint64_t ModuleOffset = 0;
-  if (!parseCommand(StringRef(InputString), IsData, ModuleName, ModuleOffset)) {
-    outs() << InputString;
+  uint64_t Offset = 0;
+  if (!parseCommand(IsAddr2Line, StringRef(InputString), Cmd, ModuleName,
+                    Offset)) {
+    outs() << InputString << "\n";
     return;
   }
 
   if (ClPrintAddress) {
     outs() << "0x";
-    outs().write_hex(ModuleOffset);
+    outs().write_hex(Offset);
     StringRef Delimiter = ClPrettyPrint ? ": " : "\n";
     outs() << Delimiter;
   }
-  ModuleOffset -= ClAdjustVMA;
-  if (IsData) {
-    auto ResOrErr = Symbolizer.symbolizeData(ModuleName, ModuleOffset);
+  Offset -= ClAdjustVMA;
+  if (Cmd == Command::Data) {
+    auto ResOrErr = Symbolizer.symbolizeData(
+        ModuleName, {Offset, object::SectionedAddress::UndefSection});
     Printer << (error(ResOrErr) ? DIGlobal() : ResOrErr.get());
+  } else if (Cmd == Command::Frame) {
+    auto ResOrErr = Symbolizer.symbolizeFrame(
+        ModuleName, {Offset, object::SectionedAddress::UndefSection});
+    if (!error(ResOrErr)) {
+      for (DILocal Local : *ResOrErr)
+        Printer << Local;
+      if (ResOrErr->empty())
+        outs() << "??\n";
+    }
   } else if (ClPrintInlining) {
-    auto ResOrErr =
-        Symbolizer.symbolizeInlinedCode(ModuleName, ModuleOffset, ClDwpName);
+    auto ResOrErr = Symbolizer.symbolizeInlinedCode(
+        ModuleName, {Offset, object::SectionedAddress::UndefSection});
     Printer << (error(ResOrErr) ? DIInliningInfo() : ResOrErr.get());
+  } else if (ClOutputStyle == DIPrinter::OutputStyle::GNU) {
+    // With ClPrintFunctions == FunctionNameKind::LinkageName (default)
+    // and ClUseSymbolTable == true (also default), Symbolizer.symbolizeCode()
+    // may override the name of an inlined function with the name of the topmost
+    // caller function in the inlining chain. This contradicts the existing
+    // behavior of addr2line. Symbolizer.symbolizeInlinedCode() overrides only
+    // the topmost function, which suits our needs better.
+    auto ResOrErr = Symbolizer.symbolizeInlinedCode(
+        ModuleName, {Offset, object::SectionedAddress::UndefSection});
+    Printer << (error(ResOrErr) ? DILineInfo() : ResOrErr.get().getFrame(0));
   } else {
-    auto ResOrErr =
-        Symbolizer.symbolizeCode(ModuleName, ModuleOffset, ClDwpName);
+    auto ResOrErr = Symbolizer.symbolizeCode(
+        ModuleName, {Offset, object::SectionedAddress::UndefSection});
     Printer << (error(ResOrErr) ? DILineInfo() : ResOrErr.get());
   }
-  outs() << "\n";
-  outs().flush();
+  if (ClOutputStyle == DIPrinter::OutputStyle::LLVM)
+    outs() << "\n";
 }
 
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);
 
+  bool IsAddr2Line = sys::path::stem(argv[0]).contains("addr2line");
+
+  if (IsAddr2Line) {
+    ClDemangle.setInitialValue(false);
+    ClPrintFunctions.setInitialValue(FunctionNameKind::None);
+    ClPrintInlining.setInitialValue(false);
+    ClUntagAddresses.setInitialValue(false);
+    ClOutputStyle.setInitialValue(DIPrinter::OutputStyle::GNU);
+  }
+
   llvm::sys::InitializeCOMRAII COM(llvm::sys::COMThreadingMode::MultiThreaded);
-  cl::ParseCommandLineOptions(argc, argv, "llvm-symbolizer\n");
+  cl::ParseCommandLineOptions(
+      argc, argv, IsAddr2Line ? "llvm-addr2line\n" : "llvm-symbolizer\n",
+      /*Errs=*/nullptr,
+      IsAddr2Line ? "LLVM_ADDR2LINE_OPTS" : "LLVM_SYMBOLIZER_OPTS");
 
   // If both --demangle and --no-demangle are specified then pick the last one.
   if (ClNoDemangle.getPosition() > ClDemangle.getPosition())
     ClDemangle = !ClNoDemangle;
 
-  LLVMSymbolizer::Options Opts(ClPrintFunctions, ClUseSymbolTable, ClDemangle,
-                               ClUseRelativeAddress, ClDefaultArch,
-                               ClFallbackDebugPath);
+  LLVMSymbolizer::Options Opts;
+  Opts.PrintFunctions = ClPrintFunctions;
+  Opts.UseSymbolTable = ClUseSymbolTable;
+  Opts.Demangle = ClDemangle;
+  Opts.RelativeAddresses = ClUseRelativeAddress;
+  Opts.UntagAddresses = ClUntagAddresses;
+  Opts.DefaultArch = ClDefaultArch;
+  Opts.FallbackDebugPath = ClFallbackDebugPath;
+  Opts.DWPName = ClDwpName;
+  Opts.DebugFileDirectory = ClDebugFileDirectory;
+  Opts.UseNativePDBReader = ClUseNativePDBReader;
+  Opts.PathStyle = DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath;
+  // If both --basenames and --relativenames are specified then pick the last
+  // one.
+  if (ClBasenames.getPosition() > ClRelativenames.getPosition())
+    Opts.PathStyle = DILineInfoSpecifier::FileLineInfoKind::BaseNameOnly;
+  else if (ClRelativenames)
+    Opts.PathStyle = DILineInfoSpecifier::FileLineInfoKind::RelativeFilePath;
 
   for (const auto &hint : ClDsymHint) {
     if (sys::path::extension(hint) == ".dSYM") {
@@ -253,17 +338,25 @@ int main(int argc, char **argv) {
 
   DIPrinter Printer(outs(), ClPrintFunctions != FunctionNameKind::None,
                     ClPrettyPrint, ClPrintSourceContextLines, ClVerbose,
-                    ClBasenames);
+                    ClOutputStyle);
 
   if (ClInputAddresses.empty()) {
     const int kMaxInputStringLength = 1024;
     char InputString[kMaxInputStringLength];
 
-    while (fgets(InputString, sizeof(InputString), stdin))
-      symbolizeInput(InputString, Symbolizer, Printer);
+    while (fgets(InputString, sizeof(InputString), stdin)) {
+      // Strip newline characters.
+      std::string StrippedInputString(InputString);
+      StrippedInputString.erase(
+          std::remove_if(StrippedInputString.begin(), StrippedInputString.end(),
+                         [](char c) { return c == '\r' || c == '\n'; }),
+          StrippedInputString.end());
+      symbolizeInput(IsAddr2Line, StrippedInputString, Symbolizer, Printer);
+      outs().flush();
+    }
   } else {
     for (StringRef Address : ClInputAddresses)
-      symbolizeInput(Address, Symbolizer, Printer);
+      symbolizeInput(IsAddr2Line, Address, Symbolizer, Printer);
   }
 
   return 0;

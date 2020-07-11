@@ -6,16 +6,16 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
-// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++03, c++11, c++14, c++17
 
 // <span>
 
-// template<ptrdiff_t Count>
+// template<size_t Count>
 //  constexpr span<element_type, Count> last() const;
 //
-// constexpr span<element_type, dynamic_extent> last(index_type count) const;
+// constexpr span<element_type, dynamic_extent> last(size_type count) const;
 //
-//  Requires: 0 <= Count && Count <= size().
+//  Requires: Count <= size().
 
 
 #include <span>
@@ -25,7 +25,7 @@
 
 #include "test_macros.h"
 
-template <typename Span, ptrdiff_t Count>
+template <typename Span, size_t Count>
 constexpr bool testConstexprSpan(Span sp)
 {
     LIBCPP_ASSERT((noexcept(sp.template last<Count>())));
@@ -45,7 +45,7 @@ constexpr bool testConstexprSpan(Span sp)
 }
 
 
-template <typename Span, ptrdiff_t Count>
+template <typename Span, size_t Count>
 void testRuntimeSpan(Span sp)
 {
     LIBCPP_ASSERT((noexcept(sp.template last<Count>())));

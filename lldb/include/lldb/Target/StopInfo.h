@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_StopInfo_h_
-#define liblldb_StopInfo_h_
+#ifndef LLDB_TARGET_STOPINFO_H
+#define LLDB_TARGET_STOPINFO_H
 
 #include <string>
 
@@ -22,9 +22,7 @@ class StopInfo {
   friend class ThreadPlanBase;
 
 public:
-  //------------------------------------------------------------------
   // Constructors and Destructors
-  //------------------------------------------------------------------
   StopInfo(Thread &thread, uint64_t value);
 
   virtual ~StopInfo() {}
@@ -35,10 +33,13 @@ public:
 
   lldb::ThreadSP GetThread() const { return m_thread_wp.lock(); }
 
-  // The value of the StopInfo depends on the StopReason. StopReason
-  // Meaning ----------------------------------------------
-  // eStopReasonBreakpoint       BreakpointSiteID eStopReasonSignal
-  // Signal number eStopReasonWatchpoint       WatchpointLocationID
+  // The value of the StopInfo depends on the StopReason.
+  //
+  // StopReason Meaning
+  // ------------------------------------------------
+  // eStopReasonBreakpoint       BreakpointSiteID
+  // eStopReasonSignal           Signal number
+  // eStopReasonWatchpoint       WatchpointLocationID
   // eStopReasonPlanComplete     No significance
 
   uint64_t GetValue() const { return m_value; }
@@ -156,9 +157,7 @@ protected:
   // to consult this later on.
   virtual bool ShouldStop(Event *event_ptr) { return true; }
 
-  //------------------------------------------------------------------
   // Classes that inherit from StackID can see and modify these
-  //------------------------------------------------------------------
   lldb::ThreadWP m_thread_wp; // The thread corresponding to the stop reason.
   uint32_t m_stop_id;   // The process stop ID for which this stop info is valid
   uint32_t m_resume_id; // This is the resume ID when we made this stop ID.
@@ -184,9 +183,10 @@ protected:
 private:
   friend class Thread;
 
-  DISALLOW_COPY_AND_ASSIGN(StopInfo);
+  StopInfo(const StopInfo &) = delete;
+  const StopInfo &operator=(const StopInfo &) = delete;
 };
 
 } // namespace lldb_private
 
-#endif // liblldb_StopInfo_h_
+#endif // LLDB_TARGET_STOPINFO_H

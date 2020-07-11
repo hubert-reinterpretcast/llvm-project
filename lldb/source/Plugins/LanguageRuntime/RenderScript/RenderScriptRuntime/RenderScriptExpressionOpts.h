@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_RENDERSCRIPT_EXPROPTS_H
-#define LLDB_RENDERSCRIPT_EXPROPTS_H
+#ifndef LLDB_SOURCE_PLUGINS_LANGUAGERUNTIME_RENDERSCRIPT_RENDERSCRIPTRUNTIME_RENDERSCRIPTEXPRESSIONOPTS_H
+#define LLDB_SOURCE_PLUGINS_LANGUAGERUNTIME_RENDERSCRIPT_RENDERSCRIPTRUNTIME_RENDERSCRIPTEXPRESSIONOPTS_H
 
 #include "llvm/IR/Module.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -34,7 +34,7 @@ public:
   RenderScriptRuntimeModulePass(const lldb_private::Process *process)
       : ModulePass(ID), m_process_ptr(process) {}
 
-  bool runOnModule(llvm::Module &module);
+  bool runOnModule(llvm::Module &module) override;
 
 private:
   const lldb_private::Process *m_process_ptr;

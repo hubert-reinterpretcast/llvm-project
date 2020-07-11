@@ -6,7 +6,8 @@
 
 // RUN: llvm-objdump -D %t | FileCheck --check-prefix=DISASM %s
 // DISASM:      Disassembly of section .nonalloc:
-// DISASM-NEXT: .nonalloc:
+// DISASM-EMPTY:
+// DISASM-NEXT: <.nonalloc>:
 // DISASM-NEXT: 0: {{.*}}  callq {{.*}} <_start>
 // DISASM-NEXT: 5: {{.*}}  callq {{.*}} <_start>
 

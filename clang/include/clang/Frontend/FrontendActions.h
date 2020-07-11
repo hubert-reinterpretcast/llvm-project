@@ -74,12 +74,6 @@ protected:
                                                  StringRef InFile) override;
 };
 
-class DeclContextPrintAction : public ASTFrontendAction {
-protected:
-  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
-                                                 StringRef InFile) override;
-};
-
 class GeneratePCHAction : public ASTFrontendAction {
 protected:
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
@@ -122,6 +116,15 @@ protected:
     return TU_Module;
   }
 
+  bool hasASTFileSupport() const override { return false; }
+};
+
+class GenerateInterfaceStubsAction : public ASTFrontendAction {
+protected:
+  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
+                                                 StringRef InFile) override;
+
+  TranslationUnitKind getTranslationUnitKind() override { return TU_Module; }
   bool hasASTFileSupport() const override { return false; }
 };
 
@@ -236,6 +239,17 @@ public:
 };
 
 class PrintPreambleAction : public FrontendAction {
+protected:
+  void ExecuteAction() override;
+  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &,
+                                                 StringRef) override {
+    return nullptr;
+  }
+
+  bool usesPreprocessorOnly() const override { return true; }
+};
+
+class PrintDependencyDirectivesSourceMinimizerAction : public FrontendAction {
 protected:
   void ExecuteAction() override;
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &,

@@ -13,8 +13,8 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/SValBuilder.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/AnalysisManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/APSIntType.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/ExprEngine.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/SubEngine.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SValVisitor.h"
 
 using namespace clang;
@@ -525,7 +525,7 @@ SVal SimpleSValBuilder::evalBinOpNN(ProgramStateRef state,
       case BO_Sub:
         if (resultTy->isIntegralOrEnumerationType())
           return makeIntVal(0, resultTy);
-        return evalCastFromNonLoc(makeIntVal(0, /*Unsigned=*/false), resultTy);
+        return evalCastFromNonLoc(makeIntVal(0, /*isUnsigned=*/false), resultTy);
       case BO_Or:
       case BO_And:
         return evalCastFromNonLoc(lhs, resultTy);
@@ -571,7 +571,15 @@ SVal SimpleSValBuilder::evalBinOpNN(ProgramStateRef state,
           // add 1 to a LocAsInteger, we'd better unpack the Loc and add to it,
           // then pack it back into a LocAsInteger.
           llvm::APSInt i = rhs.castAs<nonloc::ConcreteInt>().getValue();
-          BasicVals.getAPSIntType(Context.VoidPtrTy).apply(i);
+          // If the region has a symbolic base, pay attention to the type; it
+          // might be coming from a non-default address space. For non-symbolic
+          // regions it doesn't matter that much because such comparisons would
+          // most likely evaluate to concrete false anyway. FIXME: We might
+          // still need to handle the non-comparison case.
+          if (SymbolRef lSym = lhs.getAsLocSymbol(true))
+            BasicVals.getAPSIntType(lSym->getType()).apply(i);
+          else
+            BasicVals.getAPSIntType(Context.VoidPtrTy).apply(i);
           return evalBinOpLL(state, op, lhsL, makeLoc(i), resultTy);
         }
         default:
@@ -644,6 +652,11 @@ SVal SimpleSValBuilder::evalBinOpNN(ProgramStateRef state,
         if (LHSValue == 0)
           return evalCastFromNonLoc(lhs, resultTy);
         return makeSymExprValNN(op, InputLHS, InputRHS, resultTy);
+      case BO_Rem:
+        // 0 % x == 0
+        if (LHSValue == 0)
+          return makeZeroVal(resultTy);
+        LLVM_FALLTHROUGH;
       default:
         return makeSymExprValNN(op, InputLHS, InputRHS, resultTy);
       }

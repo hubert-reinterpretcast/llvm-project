@@ -262,28 +262,28 @@ cmovnae	%bx,%bx
 // CHECK:  encoding: [0x0f,0x44,0xd0]
         	cmovzl	%eax,%edx
 
-// CHECK: cmpps	$0, %xmm0, %xmm1
+// CHECK: cmpeqps	%xmm0, %xmm1
 // CHECK: encoding: [0x0f,0xc2,0xc8,0x00]
         cmpps $0, %xmm0, %xmm1
-// CHECK:	cmpps	$0, (%eax), %xmm1
+// CHECK:	cmpeqps	(%eax), %xmm1
 // CHECK: encoding: [0x0f,0xc2,0x08,0x00]
         cmpps $0, 0(%eax), %xmm1
-// CHECK:	cmppd	$0, %xmm0, %xmm1
+// CHECK:	cmpeqpd	%xmm0, %xmm1
 // CHECK: encoding: [0x66,0x0f,0xc2,0xc8,0x00]
         cmppd $0, %xmm0, %xmm1
-// CHECK:	cmppd	$0, (%eax), %xmm1
+// CHECK:	cmpeqpd	(%eax), %xmm1
 // CHECK: encoding: [0x66,0x0f,0xc2,0x08,0x00]
         cmppd $0, 0(%eax), %xmm1
-// CHECK:	cmpss	$0, %xmm0, %xmm1
+// CHECK:	cmpeqss	%xmm0, %xmm1
 // CHECK: encoding: [0xf3,0x0f,0xc2,0xc8,0x00]
         cmpss $0, %xmm0, %xmm1
-// CHECK:	cmpss	$0, (%eax), %xmm1
+// CHECK:	cmpeqss	(%eax), %xmm1
 // CHECK: encoding: [0xf3,0x0f,0xc2,0x08,0x00]
         cmpss $0, 0(%eax), %xmm1
-// CHECK:	cmpsd	$0, %xmm0, %xmm1
+// CHECK:	cmpeqsd	%xmm0, %xmm1
 // CHECK: encoding: [0xf2,0x0f,0xc2,0xc8,0x00]
         cmpsd $0, %xmm0, %xmm1
-// CHECK:	cmpsd	$0, (%eax), %xmm1
+// CHECK:	cmpeqsd	(%eax), %xmm1
 // CHECK: encoding: [0xf2,0x0f,0xc2,0x08,0x00]
         cmpsd $0, 0(%eax), %xmm1
 
@@ -918,9 +918,13 @@ pshufw $90, %mm4, %mm0
 // CHECK:  encoding: [0x0f,0x0b]
         	ud2a
 
-// CHECK: ud2b
-// CHECK:  encoding: [0x0f,0xb9]
-        	ud2b
+// CHECK: ud1l %edx, %edi
+// CHECK:  encoding: [0x0f,0xb9,0xfa]
+        	ud1 %edx, %edi
+
+// CHECK: ud1l (%ebx), %ecx
+// CHECK:  encoding: [0x0f,0xb9,0x0b]
+        	ud2b (%ebx), %ecx
 
 // CHECK: loope 0
 // CHECK: encoding: [0xe1,A]

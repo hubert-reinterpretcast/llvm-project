@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef CoreFoundationCPP_CFString_h_
-#define CoreFoundationCPP_CFString_h_
+#ifndef LLDB_SOURCE_HOST_MACOSX_CFCPP_CFCSTRING_H
+#define LLDB_SOURCE_HOST_MACOSX_CFCPP_CFCSTRING_H
 
 #include <iosfwd>
 
@@ -15,9 +15,7 @@
 
 class CFCString : public CFCReleaser<CFStringRef> {
 public:
-  //------------------------------------------------------------------
   // Constructors and Destructors
-  //------------------------------------------------------------------
   CFCString(CFStringRef cf_str = NULL);
   CFCString(const char *s, CFStringEncoding encoding = kCFStringEncodingUTF8);
   CFCString(const CFCString &rhs);
@@ -37,4 +35,4 @@ public:
                                        std::string &expanded_path);
 };
 
-#endif // #ifndef CoreFoundationCPP_CFString_h_
+#endif // LLDB_SOURCE_HOST_MACOSX_CFCPP_CFCSTRING_H

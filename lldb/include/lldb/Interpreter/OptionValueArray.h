@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionValueArray_h_
-#define liblldb_OptionValueArray_h_
+#ifndef LLDB_INTERPRETER_OPTIONVALUEARRAY_H
+#define LLDB_INTERPRETER_OPTIONVALUEARRAY_H
 
 #include <vector>
 
@@ -22,9 +22,7 @@ public:
 
   ~OptionValueArray() override {}
 
-  //---------------------------------------------------------------------
   // Virtual subclass pure virtual overrides
-  //---------------------------------------------------------------------
 
   OptionValue::Type GetType() const override { return eTypeArray; }
 
@@ -52,9 +50,7 @@ public:
                                   llvm::StringRef name, bool will_modify,
                                   Status &error) const override;
 
-  //---------------------------------------------------------------------
   // Subclass specific functions
-  //---------------------------------------------------------------------
 
   size_t GetSize() const { return m_values.size(); }
 
@@ -129,4 +125,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionValueArray_h_
+#endif // LLDB_INTERPRETER_OPTIONVALUEARRAY_H

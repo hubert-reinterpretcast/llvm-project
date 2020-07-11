@@ -6,11 +6,11 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
-// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++03, c++11, c++14, c++17
 
 // <span>
 
-// template<class OtherElementType, ptrdiff_t OtherExtent>
+// template<class OtherElementType, size_t OtherExtent>
 //    constexpr span(const span<OtherElementType, OtherExtent>& s) noexcept;
 //
 //  Remarks: This constructor shall not participate in overload resolution unless:
@@ -23,6 +23,11 @@
 #include <string>
 
 #include "test_macros.h"
+
+template<class T, size_t extent, size_t otherExtent>
+std::span<T, extent> createImplicitSpan(std::span<T, otherExtent> s) {
+    return {s}; // expected-error {{chosen constructor is explicit in copy-initialization}}
+}
 
 void checkCV ()
 {
@@ -100,6 +105,11 @@ int main(int, char**)
     std::span<float, 0> s4{sp0};    // expected-error {{no matching constructor for initialization of 'std::span<float, 0>'}}
 
     checkCV();
+
+    // explicit constructor necessary
+    {
+    createImplicitSpan<int, 1>(sp);
+    }
 
   return 0;
 }

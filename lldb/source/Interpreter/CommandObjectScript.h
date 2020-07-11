@@ -6,16 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_CommandObjectScript_h_
-#define liblldb_CommandObjectScript_h_
+#ifndef LLDB_SOURCE_INTERPRETER_COMMANDOBJECTSCRIPT_H
+#define LLDB_SOURCE_INTERPRETER_COMMANDOBJECTSCRIPT_H
 
 #include "lldb/Interpreter/CommandObject.h"
 
 namespace lldb_private {
 
-//-------------------------------------------------------------------------
 // CommandObjectScript
-//-------------------------------------------------------------------------
 
 class CommandObjectScript : public CommandObjectRaw {
 public:
@@ -30,4 +28,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_CommandObjectScript_h_
+#endif // LLDB_SOURCE_INTERPRETER_COMMANDOBJECTSCRIPT_H

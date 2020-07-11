@@ -140,16 +140,23 @@ RetainSummaryManager::getPersistentSummary(const RetainSummary &OldSumm) {
 static bool isSubclass(const Decl *D,
                        StringRef ClassName) {
   using namespace ast_matchers;
-  DeclarationMatcher SubclassM = cxxRecordDecl(isSameOrDerivedFrom(ClassName));
+  DeclarationMatcher SubclassM =
+      cxxRecordDecl(isSameOrDerivedFrom(std::string(ClassName)));
   return !(match(SubclassM, *D, D->getASTContext()).empty());
 }
 
 static bool isOSObjectSubclass(const Decl *D) {
-  return D && isSubclass(D, "OSMetaClassBase");
+  // OSSymbols are particular OSObjects that are allocated globally
+  // and therefore aren't really refcounted, so we ignore them.
+  return D && isSubclass(D, "OSMetaClassBase") && !isSubclass(D, "OSSymbol");
 }
 
 static bool isOSObjectDynamicCast(StringRef S) {
   return S == "safeMetaCast";
+}
+
+static bool isOSObjectRequiredCast(StringRef S) {
+  return S == "requiredMetaCast";
 }
 
 static bool isOSObjectThisCast(StringRef S) {
@@ -228,29 +235,37 @@ RetainSummaryManager::isKnownSmartPointer(QualType QT) {
 const RetainSummary *
 RetainSummaryManager::getSummaryForOSObject(const FunctionDecl *FD,
                                             StringRef FName, QualType RetTy) {
+  assert(TrackOSObjects &&
+         "Requesting a summary for an OSObject but OSObjects are not tracked");
+
   if (RetTy->isPointerType()) {
     const CXXRecordDecl *PD = RetTy->getPointeeType()->getAsCXXRecordDecl();
     if (PD && isOSObjectSubclass(PD)) {
-      if (const IdentifierInfo *II = FD->getIdentifier()) {
-        StringRef FuncName = II->getName();
-        if (isOSObjectDynamicCast(FuncName) || isOSObjectThisCast(FuncName))
-          return getDefaultSummary();
+      if (isOSObjectDynamicCast(FName) || isOSObjectRequiredCast(FName) ||
+          isOSObjectThisCast(FName))
+        return getDefaultSummary();
 
-        // All objects returned with functions *not* starting with
-        // get, or iterators, are returned at +1.
-        if ((!FuncName.startswith("get") && !FuncName.startswith("Get")) ||
-            isOSIteratorSubclass(PD)) {
-          return getOSSummaryCreateRule(FD);
-        } else {
-          return getOSSummaryGetRule(FD);
-        }
+      // TODO: Add support for the slightly common *Matching(table) idiom.
+      // Cf. IOService::nameMatching() etc. - these function have an unusual
+      // contract of returning at +0 or +1 depending on their last argument.
+      if (FName.endswith("Matching")) {
+        return getPersistentStopSummary();
+      }
+
+      // All objects returned with functions *not* starting with 'get',
+      // or iterators, are returned at +1.
+      if ((!FName.startswith("get") && !FName.startswith("Get")) ||
+          isOSIteratorSubclass(PD)) {
+        return getOSSummaryCreateRule(FD);
+      } else {
+        return getOSSummaryGetRule(FD);
       }
     }
   }
 
   if (const auto *MD = dyn_cast<CXXMethodDecl>(FD)) {
     const CXXRecordDecl *Parent = MD->getParent();
-    if (TrackOSObjects && Parent && isOSObjectSubclass(Parent)) {
+    if (Parent && isOSObjectSubclass(Parent)) {
       if (FName == "release" || FName == "taggedRelease")
         return getOSSummaryReleaseRule(FD);
 
@@ -492,7 +507,7 @@ RetainSummaryManager::generateSummary(const FunctionDecl *FD,
   FName = FName.substr(FName.find_first_not_of('_'));
 
   // Inspect the result type. Strip away any typedefs.
-  const auto *FT = FD->getType()->getAs<FunctionType>();
+  const auto *FT = FD->getType()->castAs<FunctionType>();
   QualType RetTy = FT->getReturnType();
 
   if (TrackOSObjects)
@@ -650,6 +665,7 @@ RetainSummaryManager::getSummary(AnyCall C,
   switch (C.getKind()) {
   case AnyCall::Function:
   case AnyCall::Constructor:
+  case AnyCall::InheritedConstructor:
   case AnyCall::Allocator:
   case AnyCall::Deallocator:
     Summ = getFunctionSummary(cast_or_null<FunctionDecl>(C.getDecl()));
@@ -722,12 +738,13 @@ RetainSummaryManager::canEval(const CallExpr *CE, const FunctionDecl *FD,
       // These are not retain. They just return something and retain it.
       return None;
     }
-    if (cocoa::isRefType(ResultTy, "CF", FName) ||
-        cocoa::isRefType(ResultTy, "CG", FName) ||
-        cocoa::isRefType(ResultTy, "CV", FName))
-      if (isRetain(FD, FName) || isAutorelease(FD, FName) ||
-          isMakeCollectable(FName))
-        return BehaviorSummary::Identity;
+    if (CE->getNumArgs() == 1 &&
+        (cocoa::isRefType(ResultTy, "CF", FName) ||
+         cocoa::isRefType(ResultTy, "CG", FName) ||
+         cocoa::isRefType(ResultTy, "CV", FName)) &&
+        (isRetain(FD, FName) || isAutorelease(FD, FName) ||
+         isMakeCollectable(FName)))
+      return BehaviorSummary::Identity;
 
     // safeMetaCast is called by OSDynamicCast.
     // We assume that OSDynamicCast is either an identity (cast is OK,
@@ -737,6 +754,8 @@ RetainSummaryManager::canEval(const CallExpr *CE, const FunctionDecl *FD,
     if (TrackOSObjects) {
       if (isOSObjectDynamicCast(FName) && FD->param_size() >= 1) {
         return BehaviorSummary::IdentityOrZero;
+      } else if (isOSObjectRequiredCast(FName) && FD->param_size() >= 1) {
+        return BehaviorSummary::Identity;
       } else if (isOSObjectThisCast(FName) && isa<CXXMethodDecl>(FD) &&
                  !cast<CXXMethodDecl>(FD)->isStatic()) {
         return BehaviorSummary::IdentityThis;

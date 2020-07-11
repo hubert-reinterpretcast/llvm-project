@@ -130,7 +130,7 @@ extern "C" int cleanup_exit_lvalue(bool cond) {
 // CHECK-LABEL: define{{.*}} i32 @cleanup_exit_lvalue({{.*}})
 // CHECK: call {{.*}} @_ZN1AC1Ei
 //    Spill after bar.
-// CHECK: %[[v:[^ ]*]] = call dereferenceable(4) i32* @_Z6getrefv({{.*}})
+// CHECK: %[[v:[^ ]*]] = call nonnull align 4 dereferenceable(4) i32* @_Z6getrefv({{.*}})
 // CHECK-NEXT: store i32* %[[v]], i32** %[[tmp:[^, ]*]]
 //    Do cleanup.
 // CHECK: call {{.*}} @_ZN1AD1Ev
@@ -146,7 +146,7 @@ extern "C" int cleanup_exit_lvalue_byval(bool cond, ByVal arg) {
   ByVal &r = (A(1), ({ if (cond) return 0; (void)ByVal(); }), arg);
   return r.x[0];
 }
-// CHECK-LABEL: define{{.*}} i32 @cleanup_exit_lvalue_byval({{.*}}, %struct.ByVal* byval align 4 %arg)
+// CHECK-LABEL: define{{.*}} i32 @cleanup_exit_lvalue_byval({{.*}}, %struct.ByVal* byval(%struct.ByVal) align 4 %arg)
 // CHECK: call {{.*}} @_ZN1AC1Ei
 // CHECK: call {{.*}} @_ZN1AD1Ev
 // CHECK: switch

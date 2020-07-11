@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_RegisterContextPOSIX_x86_h_
-#define liblldb_RegisterContextPOSIX_x86_h_
+#ifndef LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_REGISTERCONTEXTPOSIX_X86_H
+#define LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_REGISTERCONTEXTPOSIX_X86_H
 
 #include "RegisterContext_x86.h"
 #include "RegisterInfoInterface.h"
@@ -47,12 +47,7 @@ public:
 
   const char *GetRegisterName(unsigned reg);
 
-  uint32_t ConvertRegisterKindToRegisterNumber(lldb::RegisterKind kind,
-                                               uint32_t num) override;
-
-  //---------------------------------------------------------------------------
   // Note: prefer kernel definitions over user-land
-  //---------------------------------------------------------------------------
   enum FPRType {
     eNotValid = 0,
     eFSAVE, // TODO
@@ -162,8 +157,6 @@ protected:
 
   bool IsAVX(unsigned reg);
 
-  lldb::ByteOrder GetByteOrder();
-
   bool CopyXSTATEtoYMM(uint32_t reg, lldb::ByteOrder byte_order);
   bool CopyYMMtoXSTATE(uint32_t reg, lldb::ByteOrder byte_order);
   bool IsFPR(unsigned reg, FPRType fpr_type);
@@ -175,4 +168,4 @@ protected:
   virtual bool WriteFPR() = 0;
 };
 
-#endif // liblldb_RegisterContextPOSIX_x86_h_
+#endif // LLDB_SOURCE_PLUGINS_PROCESS_UTILITY_REGISTERCONTEXTPOSIX_X86_H

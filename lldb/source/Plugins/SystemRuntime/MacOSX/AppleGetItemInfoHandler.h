@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef lldb_AppleGetItemInfoHandler_h_
-#define lldb_AppleGetItemInfoHandler_h_
+#ifndef LLDB_SOURCE_PLUGINS_SYSTEMRUNTIME_MACOSX_APPLEGETITEMINFOHANDLER_H
+#define LLDB_SOURCE_PLUGINS_SYSTEMRUNTIME_MACOSX_APPLEGETITEMINFOHANDLER_H
 
 #include <map>
 #include <mutex>
@@ -55,38 +55,36 @@ public:
         : item_buffer_ptr(LLDB_INVALID_ADDRESS), item_buffer_size(0) {}
   };
 
-  //----------------------------------------------------------
   /// Get the information about a work item by calling
   /// __introspection_dispatch_queue_item_get_info.  If there's a page of
   /// memory that needs to be freed, pass in the address and size and it will
   /// be freed before getting the list of queues.
   ///
-  /// @param [in] thread
+  /// \param [in] thread
   ///     The thread to run this plan on.
   ///
-  /// @param [in] item
+  /// \param [in] item
   ///     The introspection_dispatch_item_info_ref value for the item of
   ///     interest.
   ///
-  /// @param [in] page_to_free
+  /// \param [in] page_to_free
   ///     An address of an inferior process vm page that needs to be
   ///     deallocated,
   ///     LLDB_INVALID_ADDRESS if this is not needed.
   ///
-  /// @param [in] page_to_free_size
+  /// \param [in] page_to_free_size
   ///     The size of the vm page that needs to be deallocated if an address was
   ///     passed in to page_to_free.
   ///
-  /// @param [out] error
+  /// \param [out] error
   ///     This object will be updated with the error status / error string from
   ///     any failures encountered.
   ///
-  /// @returns
+  /// \returns
   ///     The result of the inferior function call execution.  If there was a
   ///     failure of any kind while getting
   ///     the information, the item_buffer_ptr value will be
   ///     LLDB_INVALID_ADDRESS.
-  //----------------------------------------------------------
   GetItemInfoReturnInfo GetItemInfo(Thread &thread, lldb::addr_t item,
                                     lldb::addr_t page_to_free,
                                     uint64_t page_to_free_size,
@@ -111,4 +109,4 @@ private:
 
 } // using namespace lldb_private
 
-#endif // lldb_AppleGetItemInfoHandler_h_
+#endif // LLDB_SOURCE_PLUGINS_SYSTEMRUNTIME_MACOSX_APPLEGETITEMINFOHANDLER_H

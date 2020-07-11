@@ -41,6 +41,11 @@ class CCIf<string predicate, CCAction A> : CCPredicateAction<A> {
 class CCIfByVal<CCAction A> : CCIf<"ArgFlags.isByVal()", A> {
 }
 
+/// CCIfPreallocated - If the current argument has Preallocated parameter attribute,
+/// apply Action A.
+class CCIfPreallocated<CCAction A> : CCIf<"ArgFlags.isPreallocated()", A> {
+}
+
 /// CCIfSwiftSelf - If the current argument has swiftself parameter attribute,
 /// apply Action A.
 class CCIfSwiftSelf<CCAction A> : CCIf<"ArgFlags.isSwiftSelf()", A> {
@@ -49,6 +54,11 @@ class CCIfSwiftSelf<CCAction A> : CCIf<"ArgFlags.isSwiftSelf()", A> {
 /// CCIfSwiftError - If the current argument has swifterror parameter attribute,
 /// apply Action A.
 class CCIfSwiftError<CCAction A> : CCIf<"ArgFlags.isSwiftError()", A> {
+}
+
+/// CCIfCFGuardTarget - If the current argument has cfguardtarget parameter
+/// attribute, apply Action A.
+class CCIfCFGuardTarget<CCAction A> : CCIf<"ArgFlags.isCFGuardTarget()", A> {
 }
 
 /// CCIfConsecutiveRegs - If the current argument has InConsecutiveRegs
@@ -81,6 +91,15 @@ class CCIfVarArg<CCAction A> : CCIf<"State.isVarArg()", A> {}
 
 /// CCIfNotVarArg - If the current function is not vararg - apply the action
 class CCIfNotVarArg<CCAction A> : CCIf<"!State.isVarArg()", A> {}
+
+/// CCIfPtrAddrSpace - If the top-level parent of the current argument has
+/// pointer type in the specified address-space.
+class CCIfPtrAddrSpace<int AS, CCAction A>
+    : CCIf<"(ArgFlags.isPointer() && ArgFlags.getPointerAddrSpace() == " # AS # ")", A> {}
+
+/// CCIfPtr - If the top-level parent of the current argument had
+/// pointer type in some address-space.
+class CCIfPtr<CCAction A> : CCIf<"ArgFlags.isPointer()", A> {}
 
 /// CCAssignToReg - This action matches if there is a register in the specified
 /// list that is still available.  If so, it assigns the value to the first
@@ -140,6 +159,12 @@ class CCPromoteToUpperBitsInType<ValueType destTy> : CCAction {
 /// CCBitConvertToType - If applied, this bitconverts the specified current
 /// value to the specified type.
 class CCBitConvertToType<ValueType destTy> : CCAction {
+  ValueType DestTy = destTy;
+}
+
+/// CCTruncToType - If applied, this truncates the specified current value to
+/// the specified type.
+class CCTruncToType<ValueType destTy> : CCAction {
   ValueType DestTy = destTy;
 }
 

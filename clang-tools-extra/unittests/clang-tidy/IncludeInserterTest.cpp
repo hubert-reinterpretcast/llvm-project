@@ -31,12 +31,11 @@ public:
   IncludeInserterCheckBase(StringRef CheckName, ClangTidyContext *Context)
       : ClangTidyCheck(CheckName, Context) {}
 
-  void registerPPCallbacks(CompilerInstance &Compiler) override {
-    Inserter.reset(new utils::IncludeInserter(
-        Compiler.getSourceManager(),
-        Compiler.getLangOpts(),
-        utils::IncludeSorter::IS_Google));
-    Compiler.getPreprocessor().addPPCallbacks(Inserter->CreatePPCallbacks());
+  void registerPPCallbacks(const SourceManager &SM, Preprocessor *PP,
+                           Preprocessor *ModuleExpanderPP) override {
+    Inserter = std::make_unique<utils::IncludeInserter>(
+        SM, getLangOpts(), utils::IncludeSorter::IS_Google);
+    PP->addPPCallbacks(Inserter->CreatePPCallbacks());
   }
 
   void registerMatchers(ast_matchers::MatchFinder *Finder) override {
@@ -46,12 +45,9 @@ public:
   void check(const ast_matchers::MatchFinder::MatchResult &Result) override {
     auto Diag = diag(Result.Nodes.getNodeAs<DeclStmt>("stmt")->getBeginLoc(),
                      "foo, bar");
-    for (StringRef header : HeadersToInclude()) {
-      auto Fixit = Inserter->CreateIncludeInsertion(
-          Result.SourceManager->getMainFileID(), header, IsAngledInclude());
-      if (Fixit) {
-        Diag << *Fixit;
-      }
+    for (StringRef Header : HeadersToInclude()) {
+      Diag << Inserter->CreateIncludeInsertion(
+          Result.SourceManager->getMainFileID(), Header, IsAngledInclude());
     }
   }
 

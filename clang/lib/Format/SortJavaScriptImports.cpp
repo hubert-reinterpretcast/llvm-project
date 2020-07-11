@@ -141,11 +141,10 @@ public:
     SmallVector<unsigned, 16> Indices;
     for (unsigned i = 0, e = References.size(); i != e; ++i)
       Indices.push_back(i);
-    std::stable_sort(Indices.begin(), Indices.end(),
-                     [&](unsigned LHSI, unsigned RHSI) {
-                       return References[LHSI] < References[RHSI];
-                     });
-    bool ReferencesInOrder = std::is_sorted(Indices.begin(), Indices.end());
+    llvm::stable_sort(Indices, [&](unsigned LHSI, unsigned RHSI) {
+      return References[LHSI] < References[RHSI];
+    });
+    bool ReferencesInOrder = llvm::is_sorted(Indices);
 
     std::string ReferencesText;
     bool SymbolsInOrder = true;
@@ -246,9 +245,8 @@ private:
     // Sort the individual symbols within the import.
     // E.g. `import {b, a} from 'x';` -> `import {a, b} from 'x';`
     SmallVector<JsImportedSymbol, 1> Symbols = Reference.Symbols;
-    std::stable_sort(
-        Symbols.begin(), Symbols.end(),
-        [&](const JsImportedSymbol &LHS, const JsImportedSymbol &RHS) {
+    llvm::stable_sort(
+        Symbols, [&](const JsImportedSymbol &LHS, const JsImportedSymbol &RHS) {
           return LHS.Symbol.compare_lower(RHS.Symbol) < 0;
         });
     if (Symbols == Reference.Symbols) {

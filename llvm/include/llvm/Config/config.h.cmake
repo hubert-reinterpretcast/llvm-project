@@ -154,20 +154,11 @@
 /* Have pthread_rwlock_init */
 #cmakedefine HAVE_PTHREAD_RWLOCK_INIT ${HAVE_PTHREAD_RWLOCK_INIT}
 
-/* Define to 1 if you have the `realpath' function. */
-#cmakedefine HAVE_REALPATH ${HAVE_REALPATH}
-
 /* Define to 1 if you have the `sbrk' function. */
 #cmakedefine HAVE_SBRK ${HAVE_SBRK}
 
 /* Define to 1 if you have the `setenv' function. */
 #cmakedefine HAVE_SETENV ${HAVE_SETENV}
-
-/* Define to 1 if you have the `sched_getaffinity' function. */
-#cmakedefine HAVE_SCHED_GETAFFINITY ${HAVE_SCHED_GETAFFINITY}
-
-/* Define to 1 if you have the `CPU_COUNT' macro. */
-#cmakedefine HAVE_CPU_COUNT ${HAVE_CPU_COUNT}
 
 /* Define to 1 if you have the `setrlimit' function. */
 #cmakedefine HAVE_SETRLIMIT ${HAVE_SETRLIMIT}
@@ -346,6 +337,9 @@
 
 /* Whether GlobalISel rule coverage is being collected */
 #cmakedefine01 LLVM_GISEL_COV_ENABLED
+
+/* Define if we have z3 and want to build it */
+#cmakedefine LLVM_WITH_Z3 ${LLVM_WITH_Z3}
 
 /* Define to the default GlobalISel coverage file prefix */
 #cmakedefine LLVM_GISEL_COV_PREFIX "${LLVM_GISEL_COV_PREFIX}"

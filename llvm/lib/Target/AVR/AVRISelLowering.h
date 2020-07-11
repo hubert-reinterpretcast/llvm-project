@@ -125,8 +125,13 @@ public:
                                     std::vector<SDValue> &Ops,
                                     SelectionDAG &DAG) const override;
 
-  unsigned getRegisterByName(const char* RegName, EVT VT,
-                             SelectionDAG &DAG) const override;
+  Register getRegisterByName(const char* RegName, LLT VT,
+                             const MachineFunction &MF) const override;
+
+  bool shouldSplitFunctionArgumentsAsLittleEndian(const DataLayout &DL)
+    const override {
+    return false;
+  }
 
 private:
   SDValue getAVRCmp(SDValue LHS, SDValue RHS, ISD::CondCode CC, SDValue &AVRcc,
@@ -141,10 +146,8 @@ private:
   SDValue LowerSETCC(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerVASTART(SDValue Op, SelectionDAG &DAG) const;
 
-  CCAssignFn *CCAssignFnForReturn(CallingConv::ID CC) const;
-
-  bool CanLowerReturn(CallingConv::ID CallConv,
-                      MachineFunction &MF, bool isVarArg,
+  bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
+                      bool isVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
                       LLVMContext &Context) const override;
 

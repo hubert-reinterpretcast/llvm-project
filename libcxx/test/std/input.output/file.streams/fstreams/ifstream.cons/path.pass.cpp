@@ -6,7 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-// UNSUPPORTED: c++98, c++03, c++11, c++14
+// UNSUPPORTED: c++03, c++11, c++14
+// UNSUPPORTED: c++filesystem-disabled
+// FILE_DEPENDENCIES: test.dat
 
 // <fstream>
 
@@ -19,6 +21,8 @@
 #include <fstream>
 #include <filesystem>
 #include <cassert>
+
+#include "test_macros.h"
 
 namespace fs = std::filesystem;
 

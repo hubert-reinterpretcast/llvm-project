@@ -25,6 +25,7 @@
 #include "sanitizer_posix.h"
 
 struct link_map;  // Opaque type returned by dlopen().
+struct utsname;
 
 namespace __sanitizer {
 // Dirent structure for getdents(). Note that this structure is different from
@@ -58,10 +59,6 @@ uptr internal_prctl(int option, uptr arg2, uptr arg3, uptr arg4, uptr arg5);
 // (like the process-wide error reporting SEGV handler) must use
 // internal_sigaction instead.
 int internal_sigaction_norestorer(int signum, const void *act, void *oldact);
-#if (defined(__x86_64__) || SANITIZER_MIPS64) && !SANITIZER_GO
-// Uses a raw system call to avoid interceptors.
-int internal_sigaction_syscall(int signum, const void *act, void *oldact);
-#endif
 void internal_sigdelset(__sanitizer_sigset_t *set, int signum);
 #if defined(__x86_64__) || defined(__mips__) || defined(__aarch64__) \
   || defined(__powerpc64__) || defined(__s390__) || defined(__i386__) \
@@ -69,8 +66,12 @@ void internal_sigdelset(__sanitizer_sigset_t *set, int signum);
 uptr internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
                     int *parent_tidptr, void *newtls, int *child_tidptr);
 #endif
+int internal_uname(struct utsname *buf);
 #elif SANITIZER_FREEBSD
 void internal_sigdelset(__sanitizer_sigset_t *set, int signum);
+#elif SANITIZER_NETBSD
+void internal_sigdelset(__sanitizer_sigset_t *set, int signum);
+uptr internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg);
 #endif  // SANITIZER_LINUX
 
 // This class reads thread IDs from /proc/<pid>/task using only syscalls.

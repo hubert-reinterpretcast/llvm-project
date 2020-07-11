@@ -16,6 +16,7 @@
 #include "NVPTXLowerAggrCopies.h"
 #include "NVPTXTargetObjectFile.h"
 #include "NVPTXTargetTransformInfo.h"
+#include "TargetInfo/NVPTXTargetInfo.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
@@ -71,7 +72,7 @@ void initializeNVPTXProxyRegErasurePass(PassRegistry &);
 
 } // end namespace llvm
 
-extern "C" void LLVMInitializeNVPTXTarget() {
+extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeNVPTXTarget() {
   // Register the target.
   RegisterTargetMachine<NVPTXTargetMachine32> X(getTheNVPTXTarget32());
   RegisterTargetMachine<NVPTXTargetMachine64> Y(getTheNVPTXTarget64());
@@ -115,8 +116,8 @@ NVPTXTargetMachine::NVPTXTargetMachine(const Target &T, const Triple &TT,
                         CPU, FS, Options, Reloc::PIC_,
                         getEffectiveCodeModel(CM, CodeModel::Small), OL),
       is64bit(is64bit), UseShortPointers(UseShortPointersOpt),
-      TLOF(llvm::make_unique<NVPTXTargetObjectFile>()),
-      Subtarget(TT, CPU, FS, *this) {
+      TLOF(std::make_unique<NVPTXTargetObjectFile>()),
+      Subtarget(TT, std::string(CPU), std::string(FS), *this) {
   if (TT.getOS() == Triple::NVCL)
     drvInterface = NVPTX::NVCL;
   else
@@ -166,8 +167,16 @@ public:
   void addMachineSSAOptimization() override;
 
   FunctionPass *createTargetRegisterAllocator(bool) override;
-  void addFastRegAlloc(FunctionPass *RegAllocPass) override;
-  void addOptimizedRegAlloc(FunctionPass *RegAllocPass) override;
+  void addFastRegAlloc() override;
+  void addOptimizedRegAlloc() override;
+
+  bool addRegAssignmentFast() override {
+    llvm_unreachable("should not be used");
+  }
+
+  bool addRegAssignmentOptimized() override {
+    llvm_unreachable("should not be used");
+  }
 
 private:
   // If the opt level is aggressive, add GVN; otherwise, add EarlyCSE. This
@@ -267,8 +276,6 @@ void NVPTXPassConfig::addIRPasses() {
   addPass(createNVPTXLowerArgsPass(&getNVPTXTargetMachine()));
   if (getOptLevel() != CodeGenOpt::None) {
     addAddressSpaceInferencePasses();
-    if (!DisableLoadStoreVectorizer)
-      addPass(createLoadStoreVectorizerPass());
     addStraightLineScalarOptimizationPasses();
   }
 
@@ -286,8 +293,11 @@ void NVPTXPassConfig::addIRPasses() {
   //   %1 = shl %a, 2
   //
   // but EarlyCSE can do neither of them.
-  if (getOptLevel() != CodeGenOpt::None)
+  if (getOptLevel() != CodeGenOpt::None) {
     addEarlyCSEOrGVNPass();
+    if (!DisableLoadStoreVectorizer)
+      addPass(createLoadStoreVectorizerPass());
+  }
 }
 
 bool NVPTXPassConfig::addInstSelector() {
@@ -322,15 +332,12 @@ FunctionPass *NVPTXPassConfig::createTargetRegisterAllocator(bool) {
   return nullptr; // No reg alloc
 }
 
-void NVPTXPassConfig::addFastRegAlloc(FunctionPass *RegAllocPass) {
-  assert(!RegAllocPass && "NVPTX uses no regalloc!");
+void NVPTXPassConfig::addFastRegAlloc() {
   addPass(&PHIEliminationID);
   addPass(&TwoAddressInstructionPassID);
 }
 
-void NVPTXPassConfig::addOptimizedRegAlloc(FunctionPass *RegAllocPass) {
-  assert(!RegAllocPass && "NVPTX uses no regalloc!");
-
+void NVPTXPassConfig::addOptimizedRegAlloc() {
   addPass(&ProcessImplicitDefsID);
   addPass(&LiveVariablesID);
   addPass(&MachineLoopInfoID);

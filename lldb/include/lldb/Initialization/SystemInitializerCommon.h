@@ -6,13 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_INITIALIZATION_SYSTEM_INITIALIZER_COMMON_H
-#define LLDB_INITIALIZATION_SYSTEM_INITIALIZER_COMMON_H
+#ifndef LLDB_INITIALIZATION_SYSTEMINITIALIZERCOMMON_H
+#define LLDB_INITIALIZATION_SYSTEMINITIALIZERCOMMON_H
 
 #include "SystemInitializer.h"
 
 namespace lldb_private {
-//------------------------------------------------------------------
 /// Initializes common lldb functionality.
 ///
 /// This class is responsible for initializing a subset of lldb
@@ -21,7 +20,6 @@ namespace lldb_private {
 /// functionality is separate.  This class is used by constructing
 /// an instance of SystemLifetimeManager with this class passed to
 /// the constructor.
-//------------------------------------------------------------------
 class SystemInitializerCommon : public SystemInitializer {
 public:
   SystemInitializerCommon();
@@ -33,4 +31,4 @@ public:
 
 } // namespace lldb_private
 
-#endif // LLDB_INITIALIZATION_SYSTEM_INITIALIZER_COMMON_H
+#endif // LLDB_INITIALIZATION_SYSTEMINITIALIZERCOMMON_H

@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLDB_SBSymbolContext_h_
-#define LLDB_SBSymbolContext_h_
+#ifndef LLDB_API_SBSYMBOLCONTEXT_H
+#define LLDB_API_SBSYMBOLCONTEXT_H
 
 #include "lldb/API/SBBlock.h"
 #include "lldb/API/SBCompileUnit.h"
@@ -28,6 +28,8 @@ public:
   SBSymbolContext(const lldb_private::SymbolContext *sc_ptr);
 
   ~SBSymbolContext();
+
+  explicit operator bool() const;
 
   bool IsValid() const;
 
@@ -78,4 +80,4 @@ private:
 
 } // namespace lldb
 
-#endif // LLDB_SBSymbolContext_h_
+#endif // LLDB_API_SBSYMBOLCONTEXT_H

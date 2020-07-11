@@ -20,9 +20,10 @@
 #ifndef LLVM_TOOLS_OPT_NEWPMDRIVER_H
 #define LLVM_TOOLS_OPT_NEWPMDRIVER_H
 
+#include "llvm/ADT/ArrayRef.h"
+
 namespace llvm {
 class StringRef;
-class LLVMContext;
 class Module;
 class TargetMachine;
 class ToolOutputFile;
@@ -45,6 +46,7 @@ enum PGOKind {
   InstrUse,
   SampleUse
 };
+enum CSPGOKind { NoCSPGO, CSInstrGen, CSInstrUse };
 }
 
 /// Driver function to run the new pass manager over a module.
@@ -59,11 +61,12 @@ enum PGOKind {
 bool runPassPipeline(StringRef Arg0, Module &M, TargetMachine *TM,
                      ToolOutputFile *Out, ToolOutputFile *ThinLinkOut,
                      ToolOutputFile *OptRemarkFile, StringRef PassPipeline,
-                     opt_tool::OutputKind OK, opt_tool::VerifierKind VK,
+                     ArrayRef<StringRef> PassInfos, opt_tool::OutputKind OK,
+                     opt_tool::VerifierKind VK,
                      bool ShouldPreserveAssemblyUseListOrder,
                      bool ShouldPreserveBitcodeUseListOrder,
                      bool EmitSummaryIndex, bool EmitModuleHash,
-                     bool EnableDebugify);
+                     bool EnableDebugify, bool Coroutines);
 } // namespace llvm
 
 #endif

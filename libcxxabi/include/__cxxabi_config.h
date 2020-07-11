@@ -61,12 +61,27 @@
 
 #if defined(__clang__)
 #define _LIBCXXABI_COMPILER_CLANG
+#elif defined(__GNUC__)
+#define _LIBCXXABI_COMPILER_GCC
 #endif
 
 #if __has_attribute(__no_sanitize__) && defined(_LIBCXXABI_COMPILER_CLANG)
 #define _LIBCXXABI_NO_CFI __attribute__((__no_sanitize__("cfi")))
 #else
 #define _LIBCXXABI_NO_CFI
+#endif
+
+// wasm32 follows the arm32 ABI convention of using 32-bit guard.
+#if defined(__arm__) || defined(__wasm32__)
+#  define _LIBCXXABI_GUARD_ABI_ARM
+#endif
+
+#if defined(_LIBCXXABI_COMPILER_CLANG)
+#  if !__has_feature(cxx_exceptions)
+#    define _LIBCXXABI_NO_EXCEPTIONS
+#  endif
+#elif defined(_LIBCXXABI_COMPILER_GCC) && !__EXCEPTIONS
+#  define _LIBCXXABI_NO_EXCEPTIONS
 #endif
 
 #endif // ____CXXABI_CONFIG_H

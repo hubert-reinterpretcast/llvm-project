@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionGroupFile_h_
-#define liblldb_OptionGroupFile_h_
+#ifndef LLDB_INTERPRETER_OPTIONGROUPFILE_H
+#define LLDB_INTERPRETER_OPTIONGROUPFILE_H
 
 #include "lldb/Interpreter/OptionValueFileSpec.h"
 #include "lldb/Interpreter/OptionValueFileSpecList.h"
@@ -15,9 +15,7 @@
 
 namespace lldb_private {
 
-//-------------------------------------------------------------------------
 // OptionGroupFile
-//-------------------------------------------------------------------------
 
 class OptionGroupFile : public OptionGroup {
 public:
@@ -47,9 +45,7 @@ protected:
   OptionDefinition m_option_definition;
 };
 
-//-------------------------------------------------------------------------
 // OptionGroupFileList
-//-------------------------------------------------------------------------
 
 class OptionGroupFileList : public OptionGroup {
 public:
@@ -82,4 +78,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionGroupFile_h_
+#endif // LLDB_INTERPRETER_OPTIONGROUPFILE_H

@@ -60,7 +60,7 @@ public:
         SymbolLookup(std::move(SymbolLookup)),
         EHFramesRegister(std::move(EHFramesRegister)),
         EHFramesDeregister(std::move(EHFramesDeregister)) {
-    using ThisT = typename std::remove_reference<decltype(*this)>::type;
+    using ThisT = std::remove_reference_t<decltype(*this)>;
     addHandler<exec::CallIntVoid>(*this, &ThisT::handleCallIntVoid);
     addHandler<exec::CallMain>(*this, &ThisT::handleCallMain);
     addHandler<exec::CallVoidVoid>(*this, &ThisT::handleCallVoidVoid);
@@ -299,13 +299,13 @@ private:
     std::error_code EC;
     auto TrampolineBlock =
         sys::OwningMemoryBlock(sys::Memory::allocateMappedMemory(
-            sys::Process::getPageSize(), nullptr,
+            sys::Process::getPageSizeEstimate(), nullptr,
             sys::Memory::MF_READ | sys::Memory::MF_WRITE, EC));
     if (EC)
       return errorCodeToError(EC);
 
     uint32_t NumTrampolines =
-        (sys::Process::getPageSize() - TargetT::PointerSize) /
+        (sys::Process::getPageSizeEstimate() - TargetT::PointerSize) /
         TargetT::TrampolineSize;
 
     uint8_t *TrampolineMem = static_cast<uint8_t *>(TrampolineBlock.base());
@@ -335,7 +335,7 @@ private:
   handleGetRemoteInfo() {
     std::string ProcessTriple = sys::getProcessTriple();
     uint32_t PointerSize = TargetT::PointerSize;
-    uint32_t PageSize = sys::Process::getPageSize();
+    uint32_t PageSize = sys::Process::getPageSizeEstimate();
     uint32_t TrampolineSize = TargetT::TrampolineSize;
     uint32_t IndirectStubSize = TargetT::IndirectStubsInfo::StubSize;
     LLVM_DEBUG(dbgs() << "  Remote info:\n"

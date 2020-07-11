@@ -6,7 +6,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
-// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++03, c++11, c++14, c++17
 
 // <span>
 
@@ -26,7 +26,7 @@
 template <typename Span>
 constexpr bool testConstexprSpan(Span sp)
 {
-    _LIBCPP_ASSERT(sp.front(), "");
+    LIBCPP_ASSERT(noexcept(sp.front()));
     return std::addressof(sp.front()) == sp.data();
 }
 
@@ -34,10 +34,16 @@ constexpr bool testConstexprSpan(Span sp)
 template <typename Span>
 void testRuntimeSpan(Span sp)
 {
-    _LIBCPP_ASSERT(sp.front(), "");
+    LIBCPP_ASSERT(noexcept(sp.front()));
     assert(std::addressof(sp.front()) == sp.data());
 }
 
+template <typename Span>
+void testEmptySpan(Span sp)
+{
+    if (!sp.empty())
+        [[maybe_unused]] auto res = sp.front();
+}
 
 struct A{};
 constexpr int iArr1[] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9};
@@ -71,5 +77,8 @@ int main(int, char**)
     testRuntimeSpan(std::span<std::string>   (&s, 1));
     testRuntimeSpan(std::span<std::string, 1>(&s, 1));
 
-  return 0;
+    std::span<int, 0> sp;
+    testEmptySpan(sp);
+
+    return 0;
 }

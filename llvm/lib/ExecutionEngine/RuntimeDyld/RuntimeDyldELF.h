@@ -60,7 +60,7 @@ class RuntimeDyldELF : public RuntimeDyldImpl {
   void resolveBPFRelocation(const SectionEntry &Section, uint64_t Offset,
                             uint64_t Value, uint32_t Type, int64_t Addend);
 
-  unsigned getMaxStubSize() override {
+  unsigned getMaxStubSize() const override {
     if (Arch == Triple::aarch64 || Arch == Triple::aarch64_be)
       return 20; // movz; movk; movk; movk; br
     if (Arch == Triple::arm || Arch == Triple::thumb)
@@ -88,12 +88,13 @@ class RuntimeDyldELF : public RuntimeDyldImpl {
 
   void setMipsABI(const ObjectFile &Obj) override;
 
-  Error findPPC64TOCSection(const ELFObjectFileBase &Obj,
+  Error findPPC64TOCSection(const object::ELFObjectFileBase &Obj,
                             ObjSectionToIDMap &LocalSections,
                             RelocationValueRef &Rel);
-  Error findOPDEntrySection(const ELFObjectFileBase &Obj,
+  Error findOPDEntrySection(const object::ELFObjectFileBase &Obj,
                             ObjSectionToIDMap &LocalSections,
                             RelocationValueRef &Rel);
+
 protected:
   size_t getGOTEntrySize() override;
 

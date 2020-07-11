@@ -42,6 +42,20 @@ struct DiagnosticMessage {
   std::string Message;
   std::string FilePath;
   unsigned FileOffset;
+
+  /// Fixes for this diagnostic, grouped by file path.
+  llvm::StringMap<Replacements> Fix;
+};
+
+/// Represents a range within a specific source file.
+struct FileByteRange {
+  FileByteRange() = default;
+
+  FileByteRange(const SourceManager &Sources, CharSourceRange Range);
+
+  std::string FilePath;
+  unsigned FileOffset;
+  unsigned Length;
 };
 
 /// Represents the diagnostic with the level of severity and possible
@@ -58,18 +72,15 @@ struct Diagnostic {
              StringRef BuildDirectory);
 
   Diagnostic(llvm::StringRef DiagnosticName, const DiagnosticMessage &Message,
-             const llvm::StringMap<Replacements> &Fix,
              const SmallVector<DiagnosticMessage, 1> &Notes, Level DiagLevel,
-             llvm::StringRef BuildDirectory);
+             llvm::StringRef BuildDirectory,
+             const SmallVector<FileByteRange, 1> &Ranges);
 
   /// Name identifying the Diagnostic.
   std::string DiagnosticName;
 
   /// Message associated to the diagnostic.
   DiagnosticMessage Message;
-
-  /// Fixes to apply, grouped by file path.
-  llvm::StringMap<Replacements> Fix;
 
   /// Potential notes about the diagnostic.
   SmallVector<DiagnosticMessage, 1> Notes;
@@ -85,6 +96,10 @@ struct Diagnostic {
   ///
   /// Note: it is empty in unittest.
   std::string BuildDirectory;
+
+  /// Extra source ranges associated with the diagnostic (in addition to the
+  /// location of the Message above).
+  SmallVector<FileByteRange, 1> Ranges;
 };
 
 /// Collection of Diagnostics generated from a single translation unit.
@@ -93,6 +108,10 @@ struct TranslationUnitDiagnostics {
   std::string MainSourceFile;
   std::vector<Diagnostic> Diagnostics;
 };
+
+/// Get the first fix to apply for this diagnostic.
+/// \returns nullptr if no fixes are attached to the diagnostic.
+const llvm::StringMap<Replacements> *selectFirstFix(const Diagnostic& D);
 
 } // end namespace tooling
 } // end namespace clang

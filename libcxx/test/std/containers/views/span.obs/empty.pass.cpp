@@ -6,7 +6,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
-// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++03, c++11, c++14, c++17
 
 // <span>
 
@@ -67,7 +67,7 @@ int main(int, char**)
     assert(!(std::span<int, 5>(iArr2, 5).empty()));
 
     std::string s;
-    assert( ((std::span<std::string>(&s, (std::ptrdiff_t) 0)).empty()));
+    assert( ((std::span<std::string>(&s, (std::size_t) 0)).empty()));
     assert(!((std::span<std::string>(&s, 1).empty())));
 
   return 0;

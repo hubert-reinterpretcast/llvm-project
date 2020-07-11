@@ -6,17 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_OptionGroupUUID_h_
-#define liblldb_OptionGroupUUID_h_
+#ifndef LLDB_INTERPRETER_OPTIONGROUPUUID_H
+#define LLDB_INTERPRETER_OPTIONGROUPUUID_H
 
 #include "lldb/Interpreter/OptionValueUUID.h"
 #include "lldb/Interpreter/Options.h"
 
 namespace lldb_private {
 
-//-------------------------------------------------------------------------
 // OptionGroupUUID
-//-------------------------------------------------------------------------
 
 class OptionGroupUUID : public OptionGroup {
 public:
@@ -40,4 +38,4 @@ protected:
 
 } // namespace lldb_private
 
-#endif // liblldb_OptionGroupUUID_h_
+#endif // LLDB_INTERPRETER_OPTIONGROUPUUID_H

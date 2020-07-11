@@ -17,8 +17,8 @@
 // dyld SPI functions to get the same information without reading internal dyld
 // data structures.
 
-#ifndef liblldb_DynamicLoaderMacOSXDYLD_h_
-#define liblldb_DynamicLoaderMacOSXDYLD_h_
+#ifndef LLDB_SOURCE_PLUGINS_DYNAMICLOADER_MACOSX_DYLD_DYNAMICLOADERMACOSXDYLD_H
+#define LLDB_SOURCE_PLUGINS_DYNAMICLOADER_MACOSX_DYLD_DYNAMICLOADERMACOSXDYLD_H
 
 #include <mutex>
 #include <vector>
@@ -36,11 +36,9 @@ class DynamicLoaderMacOSXDYLD : public lldb_private::DynamicLoaderDarwin {
 public:
   DynamicLoaderMacOSXDYLD(lldb_private::Process *process);
 
-  virtual ~DynamicLoaderMacOSXDYLD() override;
+  ~DynamicLoaderMacOSXDYLD() override;
 
-  //------------------------------------------------------------------
   // Static Functions
-  //------------------------------------------------------------------
   static void Initialize();
 
   static void Terminate();
@@ -52,12 +50,10 @@ public:
   static lldb_private::DynamicLoader *
   CreateInstance(lldb_private::Process *process, bool force);
 
-  //------------------------------------------------------------------
   /// Called after attaching a process.
   ///
   /// Allow DynamicLoader plug-ins to execute some code after
   /// attaching to a process.
-  //------------------------------------------------------------------
   bool ProcessDidExec() override;
 
   lldb_private::Status CanLoadImage() override;
@@ -67,9 +63,7 @@ public:
       lldb_private::LazyBool &using_shared_cache,
       lldb_private::LazyBool &private_shared_cache) override;
 
-  //------------------------------------------------------------------
   // PluginInterface protocol
-  //------------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
@@ -127,7 +121,7 @@ protected:
       dyldImageLoadAddress = LLDB_INVALID_ADDRESS;
     }
 
-    bool IsValid() const { return version >= 1 || version <= 6; }
+    bool IsValid() const { return version >= 1 && version <= 6; }
   };
 
   static lldb::ByteOrder GetByteOrderFromMagic(uint32_t magic);
@@ -175,7 +169,9 @@ protected:
   bool m_process_image_addr_is_all_images_infos;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(DynamicLoaderMacOSXDYLD);
+  DynamicLoaderMacOSXDYLD(const DynamicLoaderMacOSXDYLD &) = delete;
+  const DynamicLoaderMacOSXDYLD &
+  operator=(const DynamicLoaderMacOSXDYLD &) = delete;
 };
 
-#endif // liblldb_DynamicLoaderMacOSXDYLD_h_
+#endif // LLDB_SOURCE_PLUGINS_DYNAMICLOADER_MACOSX_DYLD_DYNAMICLOADERMACOSXDYLD_H

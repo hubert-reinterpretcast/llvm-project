@@ -16,12 +16,10 @@
 #include "EHStreamer.h"
 
 namespace llvm {
-class Function;
 class GlobalValue;
 class MachineFunction;
 class MCExpr;
 class MCSection;
-class Value;
 struct WinEHFuncInfo;
 
 class LLVM_LIBRARY_VISIBILITY WinException : public EHStreamer {
@@ -85,6 +83,7 @@ class LLVM_LIBRARY_VISIBILITY WinException : public EHStreamer {
   /// only), it is relative to the frame pointer.
   int getFrameIndexOffset(int FrameIndex, const WinEHFuncInfo &FuncInfo);
 
+  void endFuncletImpl();
 public:
   //===--------------------------------------------------------------------===//
   // Main entry points.
@@ -98,6 +97,8 @@ public:
   /// Gather pre-function exception information.  Assumes being emitted
   /// immediately after the function entry point.
   void beginFunction(const MachineFunction *MF) override;
+
+  void markFunctionEnd() override;
 
   /// Gather and emit post-function exception information.
   void endFunction(const MachineFunction *) override;

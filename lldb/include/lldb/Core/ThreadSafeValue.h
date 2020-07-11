@@ -6,9 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef liblldb_ThreadSafeValue_h_
-#define liblldb_ThreadSafeValue_h_
-
+#ifndef LLDB_CORE_THREADSAFEVALUE_H
+#define LLDB_CORE_THREADSAFEVALUE_H
 
 #include <mutex>
 
@@ -18,9 +17,7 @@ namespace lldb_private {
 
 template <class T> class ThreadSafeValue {
 public:
-  //------------------------------------------------------------------
   // Constructors and Destructors
-  //------------------------------------------------------------------
   ThreadSafeValue() : m_value(), m_mutex() {}
 
   ThreadSafeValue(const T &value) : m_value(value), m_mutex() {}
@@ -55,11 +52,10 @@ private:
   T m_value;
   mutable std::recursive_mutex m_mutex;
 
-  //------------------------------------------------------------------
   // For ThreadSafeValue only
-  //------------------------------------------------------------------
-  DISALLOW_COPY_AND_ASSIGN(ThreadSafeValue);
+  ThreadSafeValue(const ThreadSafeValue &) = delete;
+  const ThreadSafeValue &operator=(const ThreadSafeValue &) = delete;
 };
 
 } // namespace lldb_private
-#endif // liblldb_ThreadSafeValue_h_
+#endif // LLDB_CORE_THREADSAFEVALUE_H

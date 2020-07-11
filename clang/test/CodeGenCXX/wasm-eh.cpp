@@ -1,5 +1,12 @@
-// RUN: %clang_cc1 %s -triple wasm32-unknown-unknown -fms-extensions -fexceptions -fcxx-exceptions -target-feature +exception-handling -emit-llvm -o - -std=c++11 | FileCheck %s
-// RUN: %clang_cc1 %s -triple wasm64-unknown-unknown -fms-extensions -fexceptions -fcxx-exceptions -target-feature +exception-handling -emit-llvm -o - -std=c++11 | FileCheck %s
+// REQUIRES: webassembly-registered-target
+// https://reviews.llvm.org/D79655 temporarily added a RUN line that was missing
+// a -o flag and wrote to the source dir. The file it wrote was then interpreted
+// as a test without RUN line, breaking bots. FIXME: Remove this rm line once
+// it's been in the tree long enough to clean up everyone's build dirs.
+// Removing this June 2020 should be fine.
+// RUN: rm -f %S/wasm-eh.ll
+// RUN: %clang_cc1 %s -triple wasm32-unknown-unknown -fms-extensions -fexceptions -fcxx-exceptions -fwasm-exceptions -target-feature +exception-handling -emit-llvm -o - -std=c++11 | FileCheck %s
+// RUN: %clang_cc1 %s -triple wasm64-unknown-unknown -fms-extensions -fexceptions -fcxx-exceptions -fwasm-exceptions -target-feature +exception-handling -emit-llvm -o - -std=c++11 | FileCheck %s
 
 void may_throw();
 void dont_throw() noexcept;
@@ -62,7 +69,7 @@ void test0() {
 // CHECK-NEXT:   br label %[[TRY_CONT_BB]]
 
 // CHECK: [[RETHROW_BB]]:
-// CHECK-NEXT:   call void @__cxa_rethrow() {{.*}} [ "funclet"(token %[[CATCHPAD]]) ]
+// CHECK-NEXT:   call void @llvm.wasm.rethrow.in.catch() {{.*}} [ "funclet"(token %[[CATCHPAD]]) ]
 // CHECK-NEXT:   unreachable
 
 // Single catch-all
@@ -191,7 +198,7 @@ void test5() {
 // CHECK-NEXT:   call void @__clang_call_terminate(i8* %[[EXN]]) {{.*}} [ "funclet"(token %[[CLEANUPPAD1]]) ]
 // CHECK-NEXT:   unreachable
 
-// CHECK-LABEL: define {{.*}} void @__clang_call_terminate(i8*)
+// CHECK-LABEL: define {{.*}} void @__clang_call_terminate(i8* %0)
 // CHECK-NEXT:   call i8* @__cxa_begin_catch(i8* %{{.*}})
 // CHECK-NEXT:   call void @_ZSt9terminatev()
 // CHECK-NEXT:   unreachable
@@ -232,7 +239,7 @@ void test6() {
 // CHECK:   catchret from %[[CATCHPAD]] to label %{{.*}}
 
 // CHECK: [[RETHROW_BB]]:
-// CHECK-NEXT:   invoke void @__cxa_rethrow() {{.*}} [ "funclet"(token %[[CATCHPAD]]) ]
+// CHECK-NEXT:   invoke void @llvm.wasm.rethrow.in.catch() {{.*}} [ "funclet"(token %[[CATCHPAD]]) ]
 // CHECK-NEXT:          to label %[[UNREACHABLE_BB:.*]] unwind label %[[EHCLEANUP_BB1:.*]]
 
 // CHECK: [[EHCLEANUP_BB2]]:
@@ -296,7 +303,7 @@ void test7() {
 
 // CHECK:   catchret from %[[CATCHPAD0]] to label
 
-// CHECK:   invoke void @__cxa_rethrow() {{.*}} [ "funclet"(token %[[CATCHPAD0]]) ]
+// CHECK:   invoke void @llvm.wasm.rethrow.in.catch() {{.*}} [ "funclet"(token %[[CATCHPAD0]]) ]
 
 // CHECK:   %[[CLEANUPPAD1:.*]] = cleanuppad within %[[CATCHPAD0]] []
 // CHECK:   cleanupret from %[[CLEANUPPAD1]] unwind label
@@ -368,11 +375,11 @@ void test8() {
 
 // CHECK:   catchret from %[[CATCHPAD1]] to label
 
-// CHECK:   invoke void @__cxa_rethrow() {{.*}} [ "funclet"(token %[[CATCHPAD1]]) ]
+// CHECK:   invoke void @llvm.wasm.rethrow.in.catch() {{.*}} [ "funclet"(token %[[CATCHPAD1]]) ]
 
 // CHECK:   catchret from %[[CATCHPAD0]] to label
 
-// CHECK:   call void @__cxa_rethrow() {{.*}} [ "funclet"(token %[[CATCHPAD0]]) ]
+// CHECK:   call void @llvm.wasm.rethrow.in.catch() {{.*}} [ "funclet"(token %[[CATCHPAD0]]) ]
 // CHECK:   unreachable
 
 // CHECK:   %[[CLEANUPPAD0:.*]] = cleanuppad within %[[CATCHPAD1]] []
@@ -382,3 +389,37 @@ void test8() {
 // CHECK:   cleanupret from %[[CLEANUPPAD1]] unwind to caller
 
 // CHECK:   unreachable
+
+// RUN: %clang_cc1 %s -triple wasm32-unknown-unknown -fms-extensions -fexceptions -fcxx-exceptions -fwasm-exceptions -target-feature +exception-handling -emit-llvm -o - -std=c++11 2>&1 | FileCheck %s --check-prefix=WARNING-DEFAULT
+// RUN: %clang_cc1 %s -triple wasm32-unknown-unknown -fms-extensions -fexceptions -fcxx-exceptions -fwasm-exceptions -target-feature +exception-handling -Wwasm-exception-spec -emit-llvm -o - -std=c++11 2>&1 | FileCheck %s --check-prefix=WARNING-ON
+// RUN: %clang_cc1 %s -triple wasm32-unknown-unknown -fms-extensions -fexceptions -fcxx-exceptions -fwasm-exceptions -target-feature +exception-handling -Wno-wasm-exception-spec -emit-llvm -o - -std=c++11 2>&1 | FileCheck %s --check-prefix=WARNING-OFF
+// RUN: %clang_cc1 %s -triple wasm32-unknown-unknown -fexceptions -fcxx-exceptions -emit-llvm -o - -std=c++11 2>&1 | FileCheck %s --check-prefix=NOT-WASM-EH
+
+// Wasm EH ignores dynamic exception specifications with types at the moment.
+// This is controlled by -Wwasm-exception-spec, which is on by default. This
+// warning can be suppressed with -Wno-wasm-exception-spec. Checks if a warning
+// message is correctly printed or not printed depending on the options.
+void test9() throw(int) {
+}
+// WARNING-DEFAULT: warning: dynamic exception specifications with types are currently ignored in wasm
+// WARNING-ON: warning: dynamic exception specifications with types are currently ignored in wasm
+// WARNING-OFF-NOT: warning: dynamic exception specifications with types are currently ignored in wasm
+// NOT-WASM-EH-NOT: warning: dynamic exception specifications with types are currently ignored in wasm
+
+// Wasm curremtly treats 'throw()' in the same way as 'noexept'. Check if the
+// same warning message is printed as if when a 'noexcept' function throws.
+void test10() throw() {
+  throw 3;
+}
+// WARNING-DEFAULT: warning: 'test10' has a non-throwing exception specification but can still throw
+// WARNING-DEFAULT: function declared non-throwing here
+
+// Here we only check if the command enables wasm exception handling in the
+// backend so that exception handling instructions can be generated in .s file.
+
+// RUN: %clang_cc1 %s -triple wasm32-unknown-unknown -fms-extensions -fexceptions -fcxx-exceptions -fwasm-exceptions -target-feature +exception-handling -S -o - -std=c++11 | FileCheck %s --check-prefix=ASSEMBLY
+
+// ASSEMBLY: try
+// ASSEMBLY: catch
+// ASSEMBLY: rethrow
+// ASSEMBLY: end_try

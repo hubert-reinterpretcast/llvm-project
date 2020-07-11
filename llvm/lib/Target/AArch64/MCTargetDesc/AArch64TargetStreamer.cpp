@@ -12,6 +12,7 @@
 
 #include "AArch64TargetStreamer.h"
 #include "llvm/MC/ConstantPools.h"
+#include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 
 using namespace llvm;
@@ -50,7 +51,7 @@ void AArch64TargetStreamer::emitInst(uint32_t Inst) {
     Inst >>= 8;
   }
 
-  getStreamer().EmitBytes(StringRef(Buffer, 4));
+  getStreamer().emitBytes(StringRef(Buffer, 4));
 }
 
 namespace llvm {

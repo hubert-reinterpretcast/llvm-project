@@ -1,4 +1,4 @@
-//===-- lldb.cpp ------------------------------------------------*- C++ -*-===//
+//===-- lldb.cpp ----------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -15,10 +15,6 @@ using namespace lldb_private;
 
 #ifdef HAVE_VCS_VERSION_INC
 #include "VCSVersion.inc"
-#endif
-
-#ifdef HAVE_APPLE_VERSION_INC
-#include "AppleVersion.inc"
 #endif
 
 static const char *GetLLDBRevision() {
@@ -54,8 +50,10 @@ const char *lldb_private::GetVersion() {
       g_version_str += " (";
       if (lldb_repo)
         g_version_str += lldb_repo;
+      if (lldb_repo && lldb_rev)
+        g_version_str += " ";
       if (lldb_rev) {
-        g_version_str += " revision ";
+        g_version_str += "revision ";
         g_version_str += lldb_rev;
       }
       g_version_str += ")";

@@ -14,8 +14,8 @@
 // array of load addresses for solibs loaded and unloaded.  The SPI will tell us
 // about both dyld and the executable, in addition to all of the usual solibs.
 
-#ifndef liblldb_DynamicLoaderMacOS_h_
-#define liblldb_DynamicLoaderMacOS_h_
+#ifndef LLDB_SOURCE_PLUGINS_DYNAMICLOADER_MACOSX_DYLD_DYNAMICLOADERMACOS_H
+#define LLDB_SOURCE_PLUGINS_DYNAMICLOADER_MACOSX_DYLD_DYNAMICLOADERMACOS_H
 
 #include <mutex>
 #include <vector>
@@ -32,11 +32,9 @@ class DynamicLoaderMacOS : public lldb_private::DynamicLoaderDarwin {
 public:
   DynamicLoaderMacOS(lldb_private::Process *process);
 
-  virtual ~DynamicLoaderMacOS() override;
+  ~DynamicLoaderMacOS() override;
 
-  //------------------------------------------------------------------
   // Static Functions
-  //------------------------------------------------------------------
   static void Initialize();
 
   static void Terminate();
@@ -48,12 +46,10 @@ public:
   static lldb_private::DynamicLoader *
   CreateInstance(lldb_private::Process *process, bool force);
 
-  //------------------------------------------------------------------
   /// Called after attaching a process.
   ///
   /// Allow DynamicLoader plug-ins to execute some code after
   /// attaching to a process.
-  //------------------------------------------------------------------
   bool ProcessDidExec() override;
 
   lldb_private::Status CanLoadImage() override;
@@ -63,9 +59,7 @@ public:
       lldb_private::LazyBool &using_shared_cache,
       lldb_private::LazyBool &private_shared_cache) override;
 
-  //------------------------------------------------------------------
   // PluginInterface protocol
-  //------------------------------------------------------------------
   lldb_private::ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
@@ -111,7 +105,8 @@ protected:
                                             // the "reason:exec" annotation.
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(DynamicLoaderMacOS);
+  DynamicLoaderMacOS(const DynamicLoaderMacOS &) = delete;
+  const DynamicLoaderMacOS &operator=(const DynamicLoaderMacOS &) = delete;
 };
 
-#endif // liblldb_DynamicLoaderMacOS_h_
+#endif // LLDB_SOURCE_PLUGINS_DYNAMICLOADER_MACOSX_DYLD_DYNAMICLOADERMACOS_H

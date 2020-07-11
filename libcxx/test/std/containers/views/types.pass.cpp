@@ -6,17 +6,17 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===---------------------------------------------------------------------===//
-// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++03, c++11, c++14, c++17
 
 // <span>
 
-// template<class ElementType, ptrdiff_t Extent = dynamic_extent>
+// template<class ElementType, size_t Extent = dynamic_extent>
 // class span {
 // public:
 //  // constants and types
 //  using element_type           = ElementType;
 //  using value_type             = remove_cv_t<ElementType>;
-//  using index_type             = ptrdiff_t;
+//  using size_type              = size_t;
 //  using difference_type        = ptrdiff_t;
 //  using pointer                = element_type *;
 //  using reference              = element_type &;
@@ -27,7 +27,7 @@
 //  using reverse_iterator       = std::reverse_iterator<iterator>;
 //  using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 //
-//  static constexpr index_type extent = Extent;
+//  static constexpr size_type extent = Extent;
 //
 
 #include <span>
@@ -49,26 +49,12 @@ void testIterator()
     ASSERT_SAME_TYPE(typename ItT::difference_type,   typename S::difference_type);
 }
 
-template <typename S, typename Iter>
-void testConstIterator()
-{
-    typedef std::iterator_traits<Iter> ItT;
-
-    ASSERT_SAME_TYPE(typename ItT::iterator_category, std::random_access_iterator_tag);
-    ASSERT_SAME_TYPE(typename ItT::value_type,        typename S::value_type);
-//  I'd like to say 'const typename S::pointer' here, but that gives me
-//      a const pointer to a non-const value, which is not what I want.
-    ASSERT_SAME_TYPE(typename ItT::reference,         typename S::element_type const &);
-    ASSERT_SAME_TYPE(typename ItT::pointer,           typename S::element_type const *);
-    ASSERT_SAME_TYPE(typename ItT::difference_type,   typename S::difference_type);
-}
-
-template <typename S, typename ElementType, std::ptrdiff_t Size>
+template <typename S, typename ElementType, std::size_t Size>
 void testSpan()
 {
     ASSERT_SAME_TYPE(typename S::element_type,    ElementType);
     ASSERT_SAME_TYPE(typename S::value_type,      std::remove_cv_t<ElementType>);
-    ASSERT_SAME_TYPE(typename S::index_type,      std::ptrdiff_t);
+    ASSERT_SAME_TYPE(typename S::size_type,       std::size_t);
     ASSERT_SAME_TYPE(typename S::difference_type, std::ptrdiff_t);
     ASSERT_SAME_TYPE(typename S::pointer,         ElementType *);
     ASSERT_SAME_TYPE(typename S::const_pointer,   const ElementType *);
@@ -79,18 +65,16 @@ void testSpan()
 
     testIterator<S, typename S::iterator>();
     testIterator<S, typename S::reverse_iterator>();
-    testConstIterator<S, typename S::const_iterator>();
-    testConstIterator<S, typename S::const_reverse_iterator>();
 }
 
 
 template <typename T>
 void test()
 {
-    testSpan<std::span<               T>,                T, -1>();
-    testSpan<std::span<const          T>, const          T, -1>();
-    testSpan<std::span<      volatile T>,       volatile T, -1>();
-    testSpan<std::span<const volatile T>, const volatile T, -1>();
+    testSpan<std::span<               T>,                T, std::dynamic_extent>();
+    testSpan<std::span<const          T>, const          T, std::dynamic_extent>();
+    testSpan<std::span<      volatile T>,       volatile T, std::dynamic_extent>();
+    testSpan<std::span<const volatile T>, const volatile T, std::dynamic_extent>();
 
     testSpan<std::span<               T, 5>,                T, 5>();
     testSpan<std::span<const          T, 5>, const          T, 5>();
