@@ -8,8 +8,6 @@
 
 // UNSUPPORTED: c++03, c++11, c++14
 
-// XFAIL: dylib-has-no-bad_optional_access
-
 // <optional>
 
 // class bad_optional_access is default constructible

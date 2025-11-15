@@ -1,5 +1,4 @@
 ; RUN: llc -verify-machineinstrs -O3 -mcpu=pwr7 < %s | FileCheck  %s -check-prefix=CHECK -check-prefix=CHECK-PWR
-; RUN: llc -verify-machineinstrs -O3 -mcpu=a2q < %s | FileCheck  %s -check-prefix=CHECK -check-prefix=CHECK-QPX
 ; RUN: llc -verify-machineinstrs -O3 -mcpu=pwr9 < %s | FileCheck  %s -check-prefix=FIXPOINT
 target datalayout = "E-m:e-i64:64-n32:64"
 target triple = "powerpc64-unknown-linux-gnu"
@@ -26,7 +25,7 @@ define float @reassociate_adds2(float %x0, float %x1, float %x2, float %x3) {
 ; CHECK:       # %bb.0:
 ; CHECK:       fadds [[REG0:[0-9]+]], 1, 2
 ; CHECK:       fadds [[REG1:[0-9]+]], 3, 4
-; CHECK:       fadds 1, [[REG0]], [[REG1]]
+; CHECK:       fadds 1, [[REG1]], [[REG0]]
 ; CHECK-NEXT:  blr
 
   %t0 = fadd reassoc nsz float %x0, %x1
@@ -39,8 +38,8 @@ define float @reassociate_adds3(float %x0, float %x1, float %x2, float %x3) {
 ; CHECK-LABEL: reassociate_adds3:
 ; CHECK:       # %bb.0:
 ; CHECK:       fadds [[REG0:[0-9]+]], 1, 2
-; CHECK:       fadds [[REG1:[0-9]+]], 3, 4
-; CHECK:       fadds 1, [[REG0]], [[REG1]]
+; CHECK:       fadds [[REG1:[0-9]+]], 4, 3
+; CHECK:       fadds 1, [[REG1]], [[REG0]]
 ; CHECK-NEXT:  blr
 
   %t0 = fadd reassoc nsz float %x0, %x1
@@ -53,8 +52,8 @@ define float @reassociate_adds4(float %x0, float %x1, float %x2, float %x3) {
 ; CHECK-LABEL: reassociate_adds4:
 ; CHECK:       # %bb.0:
 ; CHECK:       fadds [[REG0:[0-9]+]], 1, 2
-; CHECK:       fadds [[REG1:[0-9]+]], 3, 4
-; CHECK:       fadds 1, [[REG0]], [[REG1]]
+; CHECK:       fadds [[REG1:[0-9]+]], 4, 3
+; CHECK:       fadds 1, [[REG1]], [[REG0]]
 ; CHECK-NEXT:  blr
 
   %t0 = fadd reassoc nsz float %x0, %x1
@@ -93,9 +92,6 @@ define float @reassociate_adds5(float %x0, float %x1, float %x2, float %x3, floa
 define <4 x float> @vector_reassociate_adds1(<4 x float> %x0, <4 x float> %x1, <4 x float> %x2, <4 x float> %x3) {
 ; CHECK-LABEL: vector_reassociate_adds1:
 ; CHECK:       # %bb.0:
-; CHECK-QPX:       qvfadds [[REG0:[0-9]+]], 1, 2
-; CHECK-QPX:       qvfadds [[REG1:[0-9]+]], 3, 4
-; CHECK-QPX:       qvfadds 1, [[REG0]], [[REG1]]
 ; CHECK-PWR:       xvaddsp [[REG0:[0-9]+]], 34, 35
 ; CHECK-PWR:       xvaddsp [[REG1:[0-9]+]], 36, 37
 ; CHECK-PWR:       xvaddsp 34, [[REG0]], [[REG1]]
@@ -110,12 +106,9 @@ define <4 x float> @vector_reassociate_adds1(<4 x float> %x0, <4 x float> %x1, <
 define <4 x float> @vector_reassociate_adds2(<4 x float> %x0, <4 x float> %x1, <4 x float> %x2, <4 x float> %x3) {
 ; CHECK-LABEL: vector_reassociate_adds2:
 ; CHECK:       # %bb.0:
-; CHECK-QPX:       qvfadds [[REG0:[0-9]+]], 1, 2
-; CHECK-QPX:       qvfadds [[REG1:[0-9]+]], 3, 4
-; CHECK-QPX:       qvfadds 1, [[REG0]], [[REG1]]
 ; CHECK-PWR:       xvaddsp [[REG0:[0-9]+]], 34, 35
 ; CHECK-PWR:       xvaddsp [[REG1:[0-9]+]], 36, 37
-; CHECK-PWR:       xvaddsp 34, [[REG0]], [[REG1]]
+; CHECK-PWR:       xvaddsp 34, [[REG1]], [[REG0]]
 ; CHECK-NEXT:  blr
 
   %t0 = fadd reassoc nsz <4 x float> %x0, %x1
@@ -127,12 +120,9 @@ define <4 x float> @vector_reassociate_adds2(<4 x float> %x0, <4 x float> %x1, <
 define <4 x float> @vector_reassociate_adds3(<4 x float> %x0, <4 x float> %x1, <4 x float> %x2, <4 x float> %x3) {
 ; CHECK-LABEL: vector_reassociate_adds3:
 ; CHECK:       # %bb.0:
-; CHECK-QPX:       qvfadds [[REG0:[0-9]+]], 1, 2
-; CHECK-QPX:       qvfadds [[REG1:[0-9]+]], 3, 4
-; CHECK-QPX:       qvfadds 1, [[REG0]], [[REG1]]
 ; CHECK-PWR:       xvaddsp [[REG0:[0-9]+]], 34, 35
-; CHECK-PWR:       xvaddsp [[REG1:[0-9]+]], 36, 37
-; CHECK-PWR:       xvaddsp 34, [[REG0]], [[REG1]]
+; CHECK-PWR:       xvaddsp [[REG1:[0-9]+]], 37, 36
+; CHECK-PWR:       xvaddsp 34, [[REG1]], [[REG0]]
 ; CHECK-NEXT:  blr
 
   %t0 = fadd reassoc nsz <4 x float> %x0, %x1
@@ -144,12 +134,9 @@ define <4 x float> @vector_reassociate_adds3(<4 x float> %x0, <4 x float> %x1, <
 define <4 x float> @vector_reassociate_adds4(<4 x float> %x0, <4 x float> %x1, <4 x float> %x2, <4 x float> %x3) {
 ; CHECK-LABEL: vector_reassociate_adds4:
 ; CHECK:       # %bb.0:
-; CHECK-QPX:       qvfadds [[REG0:[0-9]+]], 1, 2
-; CHECK-QPX:       qvfadds [[REG1:[0-9]+]], 3, 4
-; CHECK-QPX:       qvfadds 1, [[REG0]], [[REG1]]
 ; CHECK-PWR:       xvaddsp [[REG0:[0-9]+]], 34, 35
-; CHECK-PWR:       xvaddsp [[REG1:[0-9]+]], 36, 37
-; CHECK-PWR:       xvaddsp 34, [[REG0]], [[REG1]]
+; CHECK-PWR:       xvaddsp [[REG1:[0-9]+]], 37, 36
+; CHECK-PWR:       xvaddsp 34, [[REG1]], [[REG0]]
 ; CHECK-NEXT:  blr
 
   %t0 = fadd reassoc nsz <4 x float> %x0, %x1
@@ -217,18 +204,15 @@ define i64 @reassociate_mulld(i64 %x0, i64 %x1, i64 %x2, i64 %x3) {
 define double @reassociate_mamaa_double(double %0, double %1, double %2, double %3, double %4, double %5) {
 ; CHECK-LABEL: reassociate_mamaa_double:
 ; CHECK:       # %bb.0:
-; CHECK-QPX-DAG:   fmadd [[REG0:[0-9]+]], 4, 3, 2
-; CHECK-QPX-DAG:   fmadd [[REG1:[0-9]+]], 6, 5, 1
-; CHECK-QPX:       fadd 1, [[REG0]], [[REG1]]
 ; CHECK-PWR-DAG:   xsmaddadp 1, 6, 5
 ; CHECK-PWR-DAG:   xsmaddadp 2, 4, 3
 ; CHECK-PWR:       xsadddp 1, 2, 1
 ; CHECK-NEXT:  blr
-  %7 = fmul reassoc nsz double %3, %2
-  %8 = fmul reassoc nsz double %5, %4
-  %9 = fadd reassoc nsz double %1, %0
-  %10 = fadd reassoc nsz double %9, %7
-  %11 = fadd reassoc nsz double %10, %8
+  %7 = fmul contract reassoc nsz double %3, %2
+  %8 = fmul contract reassoc nsz double %5, %4
+  %9 = fadd contract reassoc nsz double %1, %0
+  %10 = fadd contract reassoc nsz double %9, %7
+  %11 = fadd contract reassoc nsz double %10, %8
   ret double %11
 }
 
@@ -239,54 +223,46 @@ define float @reassociate_mamaa_float(float %0, float %1, float %2, float %3, fl
 ; CHECK-DAG:   fmadds [[REG1:[0-9]+]], 6, 5, 1
 ; CHECK:       fadds 1, [[REG0]], [[REG1]]
 ; CHECK-NEXT:  blr
-  %7 = fmul reassoc nsz float %3, %2
-  %8 = fmul reassoc nsz float %5, %4
-  %9 = fadd reassoc nsz float %1, %0
-  %10 = fadd reassoc nsz float %9, %7
-  %11 = fadd reassoc nsz float %10, %8
+  %7 = fmul contract reassoc nsz float %3, %2
+  %8 = fmul contract reassoc nsz float %5, %4
+  %9 = fadd contract reassoc nsz float %1, %0
+  %10 = fadd contract reassoc nsz float %9, %7
+  %11 = fadd contract reassoc nsz float %10, %8
   ret float %11
 }
 
 define <4 x float> @reassociate_mamaa_vec(<4 x float> %0, <4 x float> %1, <4 x float> %2, <4 x float> %3, <4 x float> %4, <4 x float> %5) {
 ; CHECK-LABEL: reassociate_mamaa_vec:
 ; CHECK:       # %bb.0:
-; CHECK-QPX-DAG:   qvfmadds [[REG0:[0-9]+]], 4, 3, 2
-; CHECK-QPX-DAG:   qvfmadds [[REG1:[0-9]+]], 6, 5, 1
-; CHECK-QPX:       qvfadds 1, [[REG0]], [[REG1]]
 ; CHECK-PWR-DAG:   xvmaddasp [[REG0:[0-9]+]], 39, 38
 ; CHECK-PWR-DAG:   xvmaddasp [[REG1:[0-9]+]], 37, 36
 ; CHECK-PWR:       xvaddsp 34, [[REG1]], [[REG0]]
 ; CHECK-NEXT:  blr
-  %7 = fmul reassoc nsz <4 x float> %3, %2
-  %8 = fmul reassoc nsz <4 x float> %5, %4
-  %9 = fadd reassoc nsz <4 x float> %1, %0
-  %10 = fadd reassoc nsz <4 x float> %9, %7
-  %11 = fadd reassoc nsz <4 x float> %10, %8
+  %7 = fmul contract reassoc nsz <4 x float> %3, %2
+  %8 = fmul contract reassoc nsz <4 x float> %5, %4
+  %9 = fadd contract reassoc nsz <4 x float> %1, %0
+  %10 = fadd contract reassoc nsz <4 x float> %9, %7
+  %11 = fadd contract reassoc nsz <4 x float> %10, %8
   ret <4 x float> %11
 }
 
 define double @reassociate_mamama_double(double %0, double %1, double %2, double %3, double %4, double %5, double %6, double %7, double %8) {
 ; CHECK-LABEL: reassociate_mamama_double:
 ; CHECK:       # %bb.0:
-; CHECK-QPX:       fmadd [[REG0:[0-9]+]], 2, 1, 7
-; CHECK-QPX-DAG:   fmul [[REG1:[0-9]+]], 4, 3
-; CHECK-QPX-DAG:   fmadd [[REG2:[0-9]+]], 6, 5, [[REG0]]
-; CHECK-QPX-DAG:   fmadd [[REG3:[0-9]+]], 9, 8, [[REG1]]
-; CHECK-QPX:       fadd 1, [[REG2]], [[REG3]]
 ; CHECK-PWR:       xsmaddadp 7, 2, 1
 ; CHECK-PWR-DAG:   xsmuldp [[REG0:[0-9]+]], 4, 3
 ; CHECK-PWR-DAG:   xsmaddadp 7, 6, 5
 ; CHECK-PWR-DAG:   xsmaddadp [[REG0]], 9, 8
 ; CHECK-PWR:       xsadddp 1, 7, [[REG0]]
 ; CHECK-NEXT:  blr
-  %10 = fmul reassoc nsz double %1, %0
-  %11 = fmul reassoc nsz double %3, %2
-  %12 = fmul reassoc nsz double %5, %4
-  %13 = fmul reassoc nsz double %8, %7
-  %14 = fadd reassoc nsz double %11, %10
-  %15 = fadd reassoc nsz double %14, %6
-  %16 = fadd reassoc nsz double %15, %12
-  %17 = fadd reassoc nsz double %16, %13
+  %10 = fmul contract reassoc nsz double %1, %0
+  %11 = fmul contract reassoc nsz double %3, %2
+  %12 = fmul contract reassoc nsz double %5, %4
+  %13 = fmul contract reassoc nsz double %8, %7
+  %14 = fadd contract reassoc nsz double %11, %10
+  %15 = fadd contract reassoc nsz double %14, %6
+  %16 = fadd contract reassoc nsz double %15, %12
+  %17 = fadd contract reassoc nsz double %16, %13
   ret double %17
 }
 
@@ -302,26 +278,26 @@ define dso_local float @reassociate_mamama_8(float %0, float %1, float %2, float
 ; CHECK-DAG:    fmadds [[REG4:[0-9]+]], 13, 12, [[REG3]]
 ; CHECK-DAG:    fmadds [[REG5:[0-9]+]], 11, 10, [[REG2]]
 ;
-; CHECK-DAG:    fmadds [[REG6:[0-9]+]], 3, 2, [[REG4]]
-; CHECK-DAG:    fmadds [[REG7:[0-9]+]], 5, 4, [[REG5]]
+; CHECK-DAG:    fmadds [[REG6:[0-9]+]], 31, 0, [[REG4]]
+; CHECK-DAG:    fmadds [[REG7:[0-9]+]], 29, 30, [[REG5]]
 ; CHECK:        fadds 1, [[REG7]], [[REG6]]
 ; CHECK-NEXT:   blr
-  %18 = fmul reassoc nsz float %2, %1
-  %19 = fadd reassoc nsz float %18, %0
-  %20 = fmul reassoc nsz float %4, %3
-  %21 = fadd reassoc nsz float %19, %20
-  %22 = fmul reassoc nsz float %6, %5
-  %23 = fadd reassoc nsz float %21, %22
-  %24 = fmul reassoc nsz float %8, %7
-  %25 = fadd reassoc nsz float %23, %24
-  %26 = fmul reassoc nsz float %10, %9
-  %27 = fadd reassoc nsz float %25, %26
-  %28 = fmul reassoc nsz float %12, %11
-  %29 = fadd reassoc nsz float %27, %28
-  %30 = fmul reassoc nsz float %14, %13
-  %31 = fadd reassoc nsz float %29, %30
-  %32 = fmul reassoc nsz float %16, %15
-  %33 = fadd reassoc nsz float %31, %32
+  %18 = fmul contract reassoc nsz float %2, %1
+  %19 = fadd contract reassoc nsz float %18, %0
+  %20 = fmul contract reassoc nsz float %4, %3
+  %21 = fadd contract reassoc nsz float %19, %20
+  %22 = fmul contract reassoc nsz float %6, %5
+  %23 = fadd contract reassoc nsz float %21, %22
+  %24 = fmul contract reassoc nsz float %8, %7
+  %25 = fadd contract reassoc nsz float %23, %24
+  %26 = fmul contract reassoc nsz float %10, %9
+  %27 = fadd contract reassoc nsz float %25, %26
+  %28 = fmul contract reassoc nsz float %12, %11
+  %29 = fadd contract reassoc nsz float %27, %28
+  %30 = fmul contract reassoc nsz float %14, %13
+  %31 = fadd contract reassoc nsz float %29, %30
+  %32 = fmul contract reassoc nsz float %16, %15
+  %33 = fadd contract reassoc nsz float %31, %32
   ret float %33
 }
 

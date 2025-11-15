@@ -16,9 +16,9 @@
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include <stdarg.h>
-#include <stddef.h>
-#include <stdint.h>
+#include <cstdarg>
+#include <cstddef>
+#include <cstdint>
 #include <type_traits>
 
 namespace lldb_private {
@@ -31,6 +31,17 @@ public:
   enum {
     eBinary = (1 << 0) ///< Get and put data as binary instead of as the default
                        /// string mode.
+  };
+
+  /// Struct to store information for color highlighting in the stream.
+  struct HighlightSettings {
+    llvm::StringRef pattern; ///< Regex pattern for highlighting.
+    llvm::StringRef prefix;  ///< ANSI color code to start colorization.
+    llvm::StringRef suffix;  ///< ANSI color code to end colorization.
+
+    HighlightSettings(llvm::StringRef p, llvm::StringRef pre,
+                      llvm::StringRef suf)
+        : pattern(p), prefix(pre), suffix(suf) {}
   };
 
   /// Utility class for counting the bytes that were written to a stream in a
@@ -231,6 +242,30 @@ public:
   ///     The string to be output to the stream.
   size_t PutCString(llvm::StringRef cstr);
 
+  /// Output a C string to the stream with color highlighting.
+  ///
+  /// Print a C string \a text to the stream, applying color highlighting to
+  /// the portions of the string that match the regex pattern \a pattern. The
+  /// pattern is matched as many times as possible throughout the string. If \a
+  /// pattern is nullptr, then no highlighting is applied.
+  ///
+  /// The highlighting is applied by enclosing the matching text in ANSI color
+  /// codes. The \a prefix parameter specifies the ANSI code to start the color
+  /// (the standard value is assumed to be 'ansi.fg.red', representing red
+  /// foreground), and the \a suffix parameter specifies the ANSI code to end
+  /// the color (the standard value is assumed to be 'ansi.normal', resetting to
+  /// default text style). These constants should be defined appropriately in
+  /// your environment.
+  ///
+  /// \param[in] text
+  ///     The string to be output to the stream.
+  ///
+  /// \param[in] settings
+  ///     Optional print hilight settings.
+  void PutCStringColorHighlighted(
+      llvm::StringRef text,
+      std::optional<HighlightSettings> settings = std::nullopt);
+
   /// Output and End of Line character to the stream.
   size_t EOL();
 
@@ -265,6 +300,12 @@ public:
   ///     The current indentation level.
   unsigned GetIndentLevel() const;
 
+  /// Set the current indentation level.
+  ///
+  /// \param[in] level
+  ///     The new indentation level.
+  void SetIndentLevel(unsigned level);
+
   /// Indent the current line in the stream.
   ///
   /// Indent the current line using the current indentation level and print an
@@ -279,6 +320,20 @@ public:
 
   /// Increment the current indentation level.
   void IndentMore(unsigned amount = 2);
+
+  struct IndentScope {
+    IndentScope(Stream &stream)
+        : m_stream(stream), m_original_indent_level(stream.GetIndentLevel()) {}
+    ~IndentScope() { m_stream.SetIndentLevel(m_original_indent_level); }
+
+  private:
+    Stream &m_stream;
+    unsigned m_original_indent_level;
+  };
+
+  /// Create an indentation scope that restores the original indent level when
+  /// the object goes out of scope (RAII).
+  IndentScope MakeIndentScope(unsigned indent_amount = 2);
 
   /// Output an offset value.
   ///
@@ -329,12 +384,6 @@ public:
   ///     address and pointer values.
   void SetAddressByteSize(uint32_t addr_size);
 
-  /// Set the current indentation level.
-  ///
-  /// \param[in] level
-  ///     The new indentation level.
-  void SetIndentLevel(unsigned level);
-
   /// Output a SLEB128 number to the stream.
   ///
   /// Put an SLEB128 \a uval out to the stream using the printf format in \a
@@ -361,10 +410,10 @@ public:
 protected:
   // Member variables
   Flags m_flags;        ///< Dump flags.
-  uint32_t m_addr_size; ///< Size of an address in bytes.
+  uint32_t m_addr_size = 4; ///< Size of an address in bytes.
   lldb::ByteOrder
       m_byte_order;   ///< Byte order to use when encoding scalar types.
-  unsigned m_indent_level;         ///< Indention level.
+  unsigned m_indent_level = 0;     ///< Indention level.
   std::size_t m_bytes_written = 0; ///< Number of bytes written so far.
 
   void _PutHex8(uint8_t uvalue, bool add_prefix);

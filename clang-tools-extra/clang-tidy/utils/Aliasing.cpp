@@ -1,4 +1,4 @@
-//===------------- Aliasing.cpp - clang-tidy ------------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -9,21 +9,31 @@
 #include "Aliasing.h"
 
 #include "clang/AST/Expr.h"
+#include "clang/AST/ExprCXX.h"
 
-namespace clang {
-namespace tidy {
-namespace utils {
+namespace clang::tidy::utils {
 
 /// Return whether \p S is a reference to the declaration of \p Var.
-static bool isAccessForVar(const Stmt *S, const VarDecl *Var) {
+static bool isAccessForVar(const Stmt *S, const ValueDecl *Var) {
   if (const auto *DRE = dyn_cast<DeclRefExpr>(S))
     return DRE->getDecl() == Var;
 
   return false;
 }
 
+static bool capturesByRef(const CXXRecordDecl *RD, const ValueDecl *Var) {
+  return llvm::any_of(RD->captures(), [Var](const LambdaCapture &C) {
+    return C.capturesVariable() && C.getCaptureKind() == LCK_ByRef &&
+           C.getCapturedVar() == Var;
+  });
+}
+
 /// Return whether \p Var has a pointer or reference in \p S.
-static bool isPtrOrReferenceForVar(const Stmt *S, const VarDecl *Var) {
+static bool isPtrOrReferenceForVar(const Stmt *S, const ValueDecl *Var) {
+  // Treat block capture by reference as a form of taking a reference.
+  if (const auto *VD = dyn_cast<VarDecl>(Var); VD && VD->isEscapingByref())
+    return true;
+
   if (const auto *DS = dyn_cast<DeclStmt>(S)) {
     for (const Decl *D : DS->getDeclGroup()) {
       if (const auto *LeftVar = dyn_cast<VarDecl>(D)) {
@@ -35,13 +45,23 @@ static bool isPtrOrReferenceForVar(const Stmt *S, const VarDecl *Var) {
   } else if (const auto *UnOp = dyn_cast<UnaryOperator>(S)) {
     if (UnOp->getOpcode() == UO_AddrOf)
       return isAccessForVar(UnOp->getSubExpr(), Var);
+  } else if (const auto *LE = dyn_cast<LambdaExpr>(S)) {
+    // Treat lambda capture by reference as a form of taking a reference.
+    return capturesByRef(LE->getLambdaClass(), Var);
+  } else if (const auto *ILE = dyn_cast<InitListExpr>(S)) {
+    return llvm::any_of(ILE->inits(), [Var](const Expr *ChildE) {
+      // If the child expression is a reference to Var, this means that it's
+      // used as an initializer of a reference-typed field. Otherwise
+      // it would have been surrounded with an implicit lvalue-to-rvalue cast.
+      return isAccessForVar(ChildE, Var);
+    });
   }
 
   return false;
 }
 
 /// Return whether \p Var has a pointer or reference in \p S.
-static bool hasPtrOrReferenceInStmt(const Stmt *S, const VarDecl *Var) {
+static bool hasPtrOrReferenceInStmt(const Stmt *S, const ValueDecl *Var) {
   if (isPtrOrReferenceForVar(S, Var))
     return true;
 
@@ -56,10 +76,22 @@ static bool hasPtrOrReferenceInStmt(const Stmt *S, const VarDecl *Var) {
   return false;
 }
 
-bool hasPtrOrReferenceInFunc(const FunctionDecl *Func, const VarDecl *Var) {
-  return hasPtrOrReferenceInStmt(Func->getBody(), Var);
+static bool refersToEnclosingLambdaCaptureByRef(const Decl *Func,
+                                                const ValueDecl *Var) {
+  const auto *MD = dyn_cast<CXXMethodDecl>(Func);
+  if (!MD)
+    return false;
+
+  const CXXRecordDecl *RD = MD->getParent();
+  if (!RD->isLambda())
+    return false;
+
+  return capturesByRef(RD, Var);
 }
 
-} // namespace utils
-} // namespace tidy
-} // namespace clang
+bool hasPtrOrReferenceInFunc(const Decl *Func, const ValueDecl *Var) {
+  return hasPtrOrReferenceInStmt(Func->getBody(), Var) ||
+         refersToEnclosingLambdaCaptureByRef(Func, Var);
+}
+
+} // namespace clang::tidy::utils

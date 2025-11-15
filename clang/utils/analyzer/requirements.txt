@@ -1,4 +1,6 @@
 graphviz
 humanize
 matplotlib
-psutil
+pandas>=1.0.4
+psutil>=5.6.6
+seaborn

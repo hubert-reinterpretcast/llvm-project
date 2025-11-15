@@ -14,23 +14,24 @@
 #ifndef MLIR_DIALECT_SHAPE_TRANSFORMS_PASSES_H_
 #define MLIR_DIALECT_SHAPE_TRANSFORMS_PASSES_H_
 
-#include <memory>
+#include "mlir/Pass/Pass.h"
+
+namespace mlir {
+class ConversionTarget;
+class ModuleOp;
+class TypeConverter;
+namespace func {
+class FuncOp;
+} // namespace func
+} // namespace mlir
 
 namespace mlir {
 
-class FunctionPass;
-class MLIRContext;
-class OwningRewritePatternList;
-class Pass;
-
-/// Creates an instance of the ShapeToShapeLowering pass that legalizes Shape
-/// dialect to be convertible to Standard. For example, `shape.num_elements` get
-/// transformed to `shape.reduce`, which can be lowered to SCF and Standard.
-std::unique_ptr<Pass> createShapeToShapeLowering();
+#define GEN_PASS_DECL
+#include "mlir/Dialect/Shape/Transforms/Passes.h.inc"
 
 /// Collects a set of patterns to rewrite ops within the Shape dialect.
-void populateShapeRewritePatterns(MLIRContext *context,
-                                  OwningRewritePatternList &patterns);
+void populateShapeRewritePatterns(RewritePatternSet &patterns);
 
 // Collects a set of patterns to replace all constraints with passing witnesses.
 // This is intended to then allow all ShapeConstraint related ops and data to
@@ -38,10 +39,16 @@ void populateShapeRewritePatterns(MLIRContext *context,
 // canonicalization and dead code elimination.
 //
 // After this pass, no cstr_ operations exist.
-void populateRemoveShapeConstraintsPatterns(OwningRewritePatternList &patterns,
-                                            MLIRContext *ctx);
-std::unique_ptr<FunctionPass> createRemoveShapeConstraintsPass();
+void populateRemoveShapeConstraintsPatterns(RewritePatternSet &patterns);
 
-} // end namespace mlir
+//===----------------------------------------------------------------------===//
+// Registration
+//===----------------------------------------------------------------------===//
+
+/// Generate the code for registering passes.
+#define GEN_PASS_REGISTRATION
+#include "mlir/Dialect/Shape/Transforms/Passes.h.inc"
+
+} // namespace mlir
 
 #endif // MLIR_DIALECT_SHAPE_TRANSFORMS_PASSES_H_

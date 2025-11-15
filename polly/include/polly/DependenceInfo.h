@@ -26,8 +26,6 @@
 #include "isl/ctx.h"
 #include "isl/isl-noexceptions.h"
 
-using namespace llvm;
-
 namespace polly {
 
 /// The accumulated dependence information for a SCoP.
@@ -35,7 +33,8 @@ namespace polly {
 /// The Dependences struct holds all dependence information we collect and
 /// compute for one SCoP. It also offers an interface that allows users to
 /// query only specific parts.
-struct Dependences {
+class Dependences final {
+public:
   // Granularities of the current dependence analysis
   enum AnalysisLevel {
     AL_Statement = 0,
@@ -126,6 +125,10 @@ struct Dependences {
   ///         dependences.
   bool isValidSchedule(Scop &S, const StatementToIslMapTy &NewSchedules) const;
 
+  /// Return true of the schedule @p NewSched is a schedule for @S that does not
+  /// violate any dependences.
+  bool isValidSchedule(Scop &S, isl::schedule NewSched) const;
+
   /// Print the stored dependence information.
   void print(llvm::raw_ostream &OS) const;
 
@@ -142,7 +145,6 @@ struct Dependences {
   friend struct DependenceAnalysis;
   friend struct DependenceInfoPrinterPass;
   friend class DependenceInfo;
-  friend class DependenceInfoWrapperPass;
 
   /// Destructor that will free internal objects.
   ~Dependences() { releaseMemory(); }
@@ -189,7 +191,9 @@ private:
   const AnalysisLevel Level;
 };
 
-struct DependenceAnalysis : public AnalysisInfoMixin<DependenceAnalysis> {
+extern Dependences::AnalysisLevel OptAnalysisLevel;
+
+struct DependenceAnalysis final : public AnalysisInfoMixin<DependenceAnalysis> {
   static AnalysisKey Key;
   struct Result {
     Scop &S;
@@ -205,13 +209,22 @@ struct DependenceAnalysis : public AnalysisInfoMixin<DependenceAnalysis> {
 
     /// Recompute dependences from schedule and memory accesses.
     const Dependences &recomputeDependences(Dependences::AnalysisLevel Level);
+
+    /// Invalidate the dependence information and recompute it when needed
+    /// again.
+    /// May be required when the underlying Scop was changed in a way that
+    /// would add new dependencies (e.g. between new statement instances
+    /// insierted into the SCoP) or intentionally breaks existing ones. It is
+    /// not required when updating the schedule that conforms the existing
+    /// dependencies.
+    void abandonDependences();
   };
   Result run(Scop &S, ScopAnalysisManager &SAM,
              ScopStandardAnalysisResults &SAR);
 };
 
-struct DependenceInfoPrinterPass
-    : public PassInfoMixin<DependenceInfoPrinterPass> {
+struct DependenceInfoPrinterPass final
+    : PassInfoMixin<DependenceInfoPrinterPass> {
   DependenceInfoPrinterPass(raw_ostream &OS) : OS(OS) {}
 
   PreservedAnalyses run(Scop &S, ScopAnalysisManager &,
@@ -220,90 +233,7 @@ struct DependenceInfoPrinterPass
   raw_ostream &OS;
 };
 
-class DependenceInfo : public ScopPass {
-public:
-  static char ID;
-
-  /// Construct a new DependenceInfo pass.
-  DependenceInfo() : ScopPass(ID) {}
-
-  /// Return the dependence information for the current SCoP.
-  ///
-  /// @param Level The granularity of dependence analysis result.
-  ///
-  /// @return The dependence analysis result
-  ///
-  const Dependences &getDependences(Dependences::AnalysisLevel Level);
-
-  /// Recompute dependences from schedule and memory accesses.
-  const Dependences &recomputeDependences(Dependences::AnalysisLevel Level);
-
-  /// Compute the dependence information for the SCoP @p S.
-  bool runOnScop(Scop &S) override;
-
-  /// Print the dependences for the given SCoP to @p OS.
-  void printScop(raw_ostream &OS, Scop &) const override;
-
-  /// Release the internal memory.
-  void releaseMemory() override {
-    for (auto &d : D)
-      d.reset();
-  }
-
-  /// Register all analyses and transformation required.
-  void getAnalysisUsage(AnalysisUsage &AU) const override;
-
-private:
-  Scop *S;
-
-  /// Dependences struct for the current SCoP.
-  std::unique_ptr<Dependences> D[Dependences::NumAnalysisLevels];
-};
-
-/// Construct a new DependenceInfoWrapper pass.
-class DependenceInfoWrapperPass : public FunctionPass {
-public:
-  static char ID;
-
-  /// Construct a new DependenceInfoWrapper pass.
-  DependenceInfoWrapperPass() : FunctionPass(ID) {}
-
-  /// Return the dependence information for the given SCoP.
-  ///
-  /// @param S     SCoP object.
-  /// @param Level The granularity of dependence analysis result.
-  ///
-  /// @return The dependence analysis result
-  ///
-  const Dependences &getDependences(Scop *S, Dependences::AnalysisLevel Level);
-
-  /// Recompute dependences from schedule and memory accesses.
-  const Dependences &recomputeDependences(Scop *S,
-                                          Dependences::AnalysisLevel Level);
-
-  /// Compute the dependence information on-the-fly for the function.
-  bool runOnFunction(Function &F) override;
-
-  /// Print the dependences for the current function to @p OS.
-  void print(raw_ostream &OS, const Module *M = nullptr) const override;
-
-  /// Release the internal memory.
-  void releaseMemory() override { ScopToDepsMap.clear(); }
-
-  /// Register all analyses and transformation required.
-  void getAnalysisUsage(AnalysisUsage &AU) const override;
-
-private:
-  using ScopToDepsMapTy = DenseMap<Scop *, std::unique_ptr<Dependences>>;
-
-  /// Scop to Dependence map for the current function.
-  ScopToDepsMapTy ScopToDepsMap;
-};
+DependenceAnalysis::Result runDependenceAnalysis(Scop &S);
 } // namespace polly
-
-namespace llvm {
-void initializeDependenceInfoPass(llvm::PassRegistry &);
-void initializeDependenceInfoWrapperPassPass(llvm::PassRegistry &);
-} // namespace llvm
 
 #endif

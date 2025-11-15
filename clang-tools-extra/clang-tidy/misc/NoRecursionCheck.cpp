@@ -1,4 +1,4 @@
-//===--- NoRecursionCheck.cpp - clang-tidy --------------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,14 +10,11 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Analysis/CallGraph.h"
-#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/SCCIterator.h"
 
 using namespace clang::ast_matchers;
 
-namespace clang {
-namespace tidy {
-namespace misc {
+namespace clang::tidy::misc {
 
 namespace {
 
@@ -53,14 +50,14 @@ public:
     // We've decided that it isn't performant to keep using vector.
     // Let's migrate the data into Set.
     Set.reserve(Storage.size());
-    Set.insert(Storage.begin(), Storage.end());
+    Set.insert_range(Storage);
   }
 
   /// count - Return 1 if the element is in the set, 0 otherwise.
   size_type count(const T &V) const {
     if (isSmall()) {
       // Since the collection is small, just do a linear search.
-      return llvm::find(Vector, V) == Vector.end() ? 0 : 1;
+      return llvm::is_contained(Vector, V) ? 1 : 0;
     }
 
     return Set.count(V);
@@ -99,14 +96,14 @@ private:
     const size_t NewMaxElts = 4 * Vector.size();
     Vector.reserve(NewMaxElts);
     Set.reserve(NewMaxElts);
-    Set.insert(Vector.begin(), Vector.end());
+    Set.insert_range(Vector);
   }
 
   /// count - Return 1 if the element is in the set, 0 otherwise.
   size_type count(const T &V) const {
     if (isSmall()) {
       // Since the collection is small, just do a linear search.
-      return llvm::find(Vector, V) == Vector.end() ? 0 : 1;
+      return llvm::is_contained(Vector, V) ? 1 : 0;
     }
     // Look-up in the Set.
     return Set.count(V);
@@ -125,7 +122,7 @@ private:
     }
     // Set time!
     // Note that this must be after `populateSet()` might have been called.
-    bool SetInsertionSucceeded = Set.insert(V).second;
+    const bool SetInsertionSucceeded = Set.insert(V).second;
     (void)SetInsertionSucceeded;
     assert(SetInsertionSucceeded && "We did check that no such value existed");
     return true;
@@ -135,10 +132,10 @@ public:
   /// Insert a new element into the SmartSmallSetVector.
   /// \returns true if the element was inserted into the SmartSmallSetVector.
   bool insert(const T &X) {
-    bool result = setInsert(X);
-    if (result)
+    const bool Result = setInsert(X);
+    if (Result)
       Vector.push_back(X);
-    return result;
+    return Result;
   }
 
   /// Clear the SmartSmallSetVector and return the underlying vector.
@@ -154,10 +151,12 @@ constexpr unsigned SmallSCCSize = 32;
 using CallStackTy =
     llvm::SmallVector<CallGraphNode::CallRecord, SmallCallStackSize>;
 
+} // namespace
+
 // In given SCC, find *some* call stack that will be cyclic.
 // This will only find *one* such stack, it might not be the smallest one,
 // and there may be other loops.
-CallStackTy PathfindSomeCycle(ArrayRef<CallGraphNode *> SCC) {
+static CallStackTy pathfindSomeCycle(ArrayRef<CallGraphNode *> SCC) {
   // We'll need to be able to performantly look up whether some CallGraphNode
   // is in SCC or not, so cache all the SCC elements in a set.
   const ImmutableSmallSet<CallGraphNode *, SmallSCCSize> SCCElts(SCC);
@@ -171,7 +170,7 @@ CallStackTy PathfindSomeCycle(ArrayRef<CallGraphNode *> SCC) {
   SmartSmallSetVector<CallGraphNode::CallRecord, SmallCallStackSize>
       CallStackSet;
 
-  // Arbitrairly take the first element of SCC as entry point.
+  // Arbitrarily take the first element of SCC as entry point.
   CallGraphNode::CallRecord EntryNode(SCC.front(), /*CallExpr=*/nullptr);
   // Continue recursing into subsequent callees that are part of this SCC,
   // and are thus known to be part of the call graph loop, until loop forms.
@@ -193,8 +192,6 @@ CallStackTy PathfindSomeCycle(ArrayRef<CallGraphNode *> SCC) {
   return CallStack;
 }
 
-} // namespace
-
 void NoRecursionCheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(translationUnitDecl().bind("TUDecl"), this);
 }
@@ -203,8 +200,8 @@ void NoRecursionCheck::handleSCC(ArrayRef<CallGraphNode *> SCC) {
   assert(!SCC.empty() && "Empty SCC does not make sense.");
 
   // First of all, call out every strongly connected function.
-  for (CallGraphNode *N : SCC) {
-    FunctionDecl *D = N->getDefinition();
+  for (const CallGraphNode *N : SCC) {
+    const FunctionDecl *D = N->getDefinition();
     diag(D->getLocation(), "function %0 is within a recursive call chain") << D;
   }
 
@@ -212,7 +209,7 @@ void NoRecursionCheck::handleSCC(ArrayRef<CallGraphNode *> SCC) {
   // the call graph. It doesn't *really* tell us about the cycles they form.
   // And there may be more than one cycle in SCC.
   // So let's form a call stack that eventually exposes *some* cycle.
-  const CallStackTy EventuallyCyclicCallStack = PathfindSomeCycle(SCC);
+  const CallStackTy EventuallyCyclicCallStack = pathfindSomeCycle(SCC);
   assert(!EventuallyCyclicCallStack.empty() && "We should've found the cycle");
 
   // While last node of the call stack does cause a loop, due to the way we
@@ -227,7 +224,8 @@ void NoRecursionCheck::handleSCC(ArrayRef<CallGraphNode *> SCC) {
   assert(CyclicCallStack.size() >= 2 && "Cycle requires at least 2 frames");
 
   // Which function we decided to be the entry point that lead to the recursion?
-  FunctionDecl *CycleEntryFn = CyclicCallStack.front().Callee->getDefinition();
+  const FunctionDecl *CycleEntryFn =
+      CyclicCallStack.front().Callee->getDefinition();
   // And now, for ease of understanding, let's print the call sequence that
   // forms the cycle in question.
   diag(CycleEntryFn->getLocation(),
@@ -236,8 +234,8 @@ void NoRecursionCheck::handleSCC(ArrayRef<CallGraphNode *> SCC) {
       << CycleEntryFn;
   for (int CurFrame = 1, NumFrames = CyclicCallStack.size();
        CurFrame != NumFrames; ++CurFrame) {
-    CallGraphNode::CallRecord PrevNode = CyclicCallStack[CurFrame - 1];
-    CallGraphNode::CallRecord CurrNode = CyclicCallStack[CurFrame];
+    const CallGraphNode::CallRecord PrevNode = CyclicCallStack[CurFrame - 1];
+    const CallGraphNode::CallRecord CurrNode = CyclicCallStack[CurFrame];
 
     Decl *PrevDecl = PrevNode.Callee->getDecl();
     Decl *CurrDecl = CurrNode.Callee->getDecl();
@@ -270,6 +268,4 @@ void NoRecursionCheck::check(const MatchFinder::MatchResult &Result) {
   }
 }
 
-} // namespace misc
-} // namespace tidy
-} // namespace clang
+} // namespace clang::tidy::misc

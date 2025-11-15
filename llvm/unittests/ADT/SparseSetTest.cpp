@@ -13,7 +13,7 @@ using namespace llvm;
 
 namespace {
 
-typedef SparseSet<unsigned> USet;
+using USet = SparseSet<unsigned>;
 
 // Empty set tests.
 TEST(SparseSetTest, EmptySet) {
@@ -25,15 +25,15 @@ TEST(SparseSetTest, EmptySet) {
   Set.setUniverse(10);
 
   // Lookups on empty set.
-  EXPECT_TRUE(Set.find(0) == Set.end());
-  EXPECT_TRUE(Set.find(9) == Set.end());
+  EXPECT_FALSE(Set.contains(0));
+  EXPECT_FALSE(Set.contains(9));
 
   // Same thing on a const reference.
   const USet &CSet = Set;
   EXPECT_TRUE(CSet.empty());
   EXPECT_TRUE(CSet.begin() == CSet.end());
   EXPECT_EQ(0u, CSet.size());
-  EXPECT_TRUE(CSet.find(0) == CSet.end());
+  EXPECT_FALSE(CSet.contains(0));
   USet::const_iterator I = CSet.find(5);
   EXPECT_TRUE(I == CSet.end());
 }
@@ -51,8 +51,9 @@ TEST(SparseSetTest, SingleEntrySet) {
   EXPECT_TRUE(Set.begin() + 1 == Set.end());
   EXPECT_EQ(1u, Set.size());
 
-  EXPECT_TRUE(Set.find(0) == Set.end());
-  EXPECT_TRUE(Set.find(9) == Set.end());
+  EXPECT_FALSE(Set.contains(0));
+  EXPECT_FALSE(Set.contains(9));
+  EXPECT_TRUE(Set.contains(5));
 
   EXPECT_FALSE(Set.count(0));
   EXPECT_TRUE(Set.count(5));
@@ -71,6 +72,7 @@ TEST(SparseSetTest, SingleEntrySet) {
   USet::iterator I = Set.find(5);
   EXPECT_TRUE(I == Set.begin());
   I = Set.erase(I);
+  EXPECT_FALSE(Set.contains(5));
   EXPECT_TRUE(I == Set.end());
   EXPECT_TRUE(Set.empty());
 }
@@ -164,7 +166,7 @@ struct Alt {
 };
 
 TEST(SparseSetTest, AltStructSet) {
-  typedef SparseSet<Alt> ASet;
+  using ASet = SparseSet<Alt>;
   ASet Set;
   Set.setUniverse(10);
   Set.insert(Alt(1005));
@@ -202,4 +204,16 @@ TEST(SparseSetTest, PopBack) {
   for (unsigned i = 0; i < UpperBound; ++i)
     ASSERT_TRUE(Set.insert(i).second);
 }
+
+TEST(SparseSetTest, MoveConstructor) {
+  USet Set;
+  Set.setUniverse(2);
+  Set.insert(1);
+  EXPECT_FALSE(Set.empty());
+  // Move and check original is empty.
+  USet OtherSet(std::move(Set));
+  EXPECT_TRUE(Set.empty());
+  EXPECT_TRUE(OtherSet.contains(1));
+}
+
 } // namespace

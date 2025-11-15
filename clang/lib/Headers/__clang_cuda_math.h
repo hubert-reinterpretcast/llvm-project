@@ -12,6 +12,10 @@
 #error "This file is for CUDA compilation only."
 #endif
 
+// The __CLANG_GPU_DISABLE_MATH_WRAPPERS macro provides a way to let standard
+// libcalls reach the link step instead of being eagerly replaced.
+#ifndef __CLANG_GPU_DISABLE_MATH_WRAPPERS
+
 #ifndef __OPENMP_NVPTX__
 #if CUDA_VERSION < 9000
 #error This file is intended to be used with CUDA-9+ only.
@@ -36,7 +40,7 @@
 // because the OpenMP overlay requires constexpr functions here but prior to
 // c++14 void return functions could not be constexpr.
 #pragma push_macro("__DEVICE_VOID__")
-#ifdef __OPENMP_NVPTX__ && defined(__cplusplus) && __cplusplus < 201402L
+#if defined(__OPENMP_NVPTX__) && defined(__cplusplus) && __cplusplus < 201402L
 #define __DEVICE_VOID__ static __attribute__((always_inline, nothrow))
 #else
 #define __DEVICE_VOID__ __DEVICE__
@@ -45,9 +49,9 @@
 // libdevice provides fast low precision and slow full-recision implementations
 // for some functions. Which one gets selected depends on
 // __CLANG_CUDA_APPROX_TRANSCENDENTALS__ which gets defined by clang if
-// -ffast-math or -fcuda-approx-transcendentals are in effect.
+// -ffast-math or -fgpu-approx-transcendentals are in effect.
 #pragma push_macro("__FAST_OR_SLOW")
-#if defined(__CLANG_CUDA_APPROX_TRANSCENDENTALS__)
+#if defined(__CLANG_GPU_APPROX_TRANSCENDENTALS__)
 #define __FAST_OR_SLOW(fast, slow) fast
 #else
 #define __FAST_OR_SLOW(fast, slow) slow
@@ -166,6 +170,8 @@ __DEVICE__ long long llrint(double __a) { return __nv_llrint(__a); }
 __DEVICE__ long long llrintf(float __a) { return __nv_llrintf(__a); }
 __DEVICE__ long long llround(double __a) { return __nv_llround(__a); }
 __DEVICE__ long long llroundf(float __a) { return __nv_llroundf(__a); }
+__DEVICE__ double round(double __a) { return __nv_round(__a); }
+__DEVICE__ float roundf(float __a) { return __nv_roundf(__a); }
 __DEVICE__ double log(double __a) { return __nv_log(__a); }
 __DEVICE__ double log10(double __a) { return __nv_log10(__a); }
 __DEVICE__ float log10f(float __a) { return __nv_log10f(__a); }
@@ -195,8 +201,8 @@ __DEVICE__ int max(int __a, int __b) { return __nv_max(__a, __b); }
 __DEVICE__ int min(int __a, int __b) { return __nv_min(__a, __b); }
 __DEVICE__ double modf(double __a, double *__b) { return __nv_modf(__a, __b); }
 __DEVICE__ float modff(float __a, float *__b) { return __nv_modff(__a, __b); }
-__DEVICE__ double nearbyint(double __a) { return __nv_nearbyint(__a); }
-__DEVICE__ float nearbyintf(float __a) { return __nv_nearbyintf(__a); }
+__DEVICE__ double nearbyint(double __a) { return __builtin_nearbyint(__a); }
+__DEVICE__ float nearbyintf(float __a) { return __builtin_nearbyintf(__a); }
 __DEVICE__ double nextafter(double __a, double __b) {
   return __nv_nextafter(__a, __b);
 }
@@ -249,8 +255,9 @@ __DEVICE__ double rhypot(double __a, double __b) {
 __DEVICE__ float rhypotf(float __a, float __b) {
   return __nv_rhypotf(__a, __b);
 }
-__DEVICE__ double rint(double __a) { return __nv_rint(__a); }
-__DEVICE__ float rintf(float __a) { return __nv_rintf(__a); }
+// __nv_rint* in libdevice is buggy and produces incorrect results.
+__DEVICE__ double rint(double __a) { return __builtin_rint(__a); }
+__DEVICE__ float rintf(float __a) { return __builtin_rintf(__a); }
 __DEVICE__ double rnorm(int __a, const double *__b) {
   return __nv_rnorm(__a, __b);
 }
@@ -269,8 +276,6 @@ __DEVICE__ float rnorm4df(float __a, float __b, float __c, float __d) {
 __DEVICE__ float rnormf(int __dim, const float *__t) {
   return __nv_rnormf(__dim, __t);
 }
-__DEVICE__ double round(double __a) { return __nv_round(__a); }
-__DEVICE__ float roundf(float __a) { return __nv_roundf(__a); }
 __DEVICE__ double rsqrt(double __a) { return __nv_rsqrt(__a); }
 __DEVICE__ float rsqrtf(float __a) { return __nv_rsqrtf(__a); }
 __DEVICE__ double scalbn(double __a, int __b) { return __nv_scalbn(__a, __b); }
@@ -340,18 +345,9 @@ __DEVICE__ float y1f(float __a) { return __nv_y1f(__a); }
 __DEVICE__ double yn(int __a, double __b) { return __nv_yn(__a, __b); }
 __DEVICE__ float ynf(int __a, float __b) { return __nv_ynf(__a, __b); }
 
-// In C++ mode OpenMP takes the system versions of these because some math
-// headers provide the wrong return type. This cannot happen in C and we can and
-// want to use the specialized versions right away.
-#if defined(_OPENMP) && !defined(__cplusplus)
-__DEVICE__ int isinff(float __x) { return __nv_isinff(__x); }
-__DEVICE__ int isinf(double __x) { return __nv_isinfd(__x); }
-__DEVICE__ int isnanf(float __x) { return __nv_isnanf(__x); }
-__DEVICE__ int isnan(double __x) { return __nv_isnand(__x); }
-#endif
-
 #pragma pop_macro("__DEVICE__")
 #pragma pop_macro("__DEVICE_VOID__")
 #pragma pop_macro("__FAST_OR_SLOW")
 
-#endif // __CLANG_CUDA_DEVICE_FUNCTIONS_H__
+#endif // __CLANG_GPU_DISABLE_MATH_WRAPPERS
+#endif // __CLANG_CUDA_MATH_H__

@@ -12,9 +12,11 @@
 #include "llvm/Analysis/DependenceAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/PostDominators.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Transforms/Utils/ScalarEvolutionExpander.h"
 #include "gtest/gtest.h"
@@ -36,7 +38,7 @@ static void run(Module &M, StringRef FuncName,
   auto *F = M.getFunction(FuncName);
   DominatorTree DT(*F);
   PostDominatorTree PDT(*F);
-  TargetLibraryInfoImpl TLII;
+  TargetLibraryInfoImpl TLII(M.getTargetTriple());
   TargetLibraryInfo TLI(TLII);
   AssumptionCache AC(*F);
   AliasAnalysis AA(TLI);
@@ -73,21 +75,21 @@ TEST(CodeMoverUtils, IsControlFlowEquivalentSimpleTest) {
   //     i = 3;
   // }
   std::unique_ptr<Module> M =
-      parseIR(C, R"(define void @foo(i32* %i, i1 %cond1, i1 %cond2) {
+      parseIR(C, R"(define void @foo(ptr %i, i1 %cond1, i1 %cond2) {
                  entry:
                    br i1 %cond1, label %if.first, label %if.first.end
                  if.first:
-                   store i32 1, i32* %i, align 4
+                   store i32 1, ptr %i, align 4
                    br label %if.first.end
                  if.first.end:
                    br i1 %cond1, label %if.second, label %if.second.end
                  if.second:
-                   store i32 2, i32* %i, align 4
+                   store i32 2, ptr %i, align 4
                    br label %if.second.end
                  if.second.end:
                    br i1 %cond2, label %if.third, label %if.third.end
                  if.third:
-                   store i32 3, i32* %i, align 4
+                   store i32 3, ptr %i, align 4
                    br label %if.third.end
                  if.third.end:
                    ret void
@@ -134,51 +136,51 @@ TEST(CodeMoverUtils, IsControlFlowEquivalentOppositeCondTest) {
   //     i = 9;
   // }
   std::unique_ptr<Module> M =
-      parseIR(C, R"(define void @foo(i32* %i, i32 %X, i32 %Y) {
+      parseIR(C, R"(define void @foo(ptr %i, i32 %X, i32 %Y) {
                  entry:
                    %cmp1 = icmp ult i32 %X, %Y
                    br i1 %cmp1, label %if.first, label %if.first.end
                  if.first:
-                   store i32 1, i32* %i, align 4
+                   store i32 1, ptr %i, align 4
                    br label %if.first.end
                  if.first.end:
                    %cmp2 = icmp ugt i32 %Y, %X
                    br i1 %cmp2, label %if.second, label %if.second.end
                  if.second:
-                   store i32 2, i32* %i, align 4
+                   store i32 2, ptr %i, align 4
                    br label %if.second.end
                  if.second.end:
                    %cmp3 = icmp uge i32 %X, %Y
                    br i1 %cmp3, label %if.third, label %if.third.else
                  if.third:
-                   store i32 3, i32* %i, align 4
+                   store i32 3, ptr %i, align 4
                    br label %if.third.end
                  if.third.else:
-                   store i32 4, i32* %i, align 4
+                   store i32 4, ptr %i, align 4
                    br label %if.third.end
                  if.third.end:
                    %cmp4 = icmp eq i32 %X, %Y
                    br i1 %cmp4, label %if.fourth, label %if.fourth.end
                  if.fourth:
-                   store i32 5, i32* %i, align 4
+                   store i32 5, ptr %i, align 4
                    br label %if.fourth.end
                  if.fourth.end:
                    %cmp5 = icmp eq i32 %Y, %X
                    br i1 %cmp5, label %if.fifth, label %if.fifth.else
                  if.fifth:
-                   store i32 6, i32* %i, align 4
+                   store i32 6, ptr %i, align 4
                    br label %if.fifth.end
                  if.fifth.else:
-                   store i32 7, i32* %i, align 4
+                   store i32 7, ptr %i, align 4
                    br label %if.fifth.end
                  if.fifth.end:
                    %cmp6 = icmp ne i32 %X, %Y
                    br i1 %cmp6, label %if.sixth, label %if.sixth.else
                  if.sixth:
-                   store i32 8, i32* %i, align 4
+                   store i32 8, ptr %i, align 4
                    br label %if.sixth.end
                  if.sixth.else:
-                   store i32 9, i32* %i, align 4
+                   store i32 9, ptr %i, align 4
                    br label %if.sixth.end
                  if.sixth.end:
                    ret void
@@ -225,20 +227,20 @@ TEST(CodeMoverUtils, IsControlFlowEquivalentCondNestTest) {
   //       i = 2;
   // }
   std::unique_ptr<Module> M =
-      parseIR(C, R"(define void @foo(i32* %i, i1 %cond1, i1 %cond2) { 
+      parseIR(C, R"(define void @foo(ptr %i, i1 %cond1, i1 %cond2) {
          entry:
            br i1 %cond1, label %if.outer.first, label %if.first.end
          if.outer.first:
            br i1 %cond2, label %if.inner.first, label %if.first.end
          if.inner.first:
-           store i32 1, i32* %i, align 4
+           store i32 1, ptr %i, align 4
            br label %if.first.end
          if.first.end:
            br i1 %cond2, label %if.outer.second, label %if.second.end
          if.outer.second:
            br i1 %cond1, label %if.inner.second, label %if.second.end
          if.inner.second:
-           store i32 2, i32* %i, align 4
+           store i32 2, ptr %i, align 4
            br label %if.second.end
          if.second.end:
            ret void
@@ -280,8 +282,8 @@ TEST(CodeMoverUtils, IsControlFlowEquivalentImbalanceTest) {
   //   if (cond1)
   //     i = 4;
   // }
-  std::unique_ptr<Module> M = parseIR(
-      C, R"(define void @foo(i32* %i, i1 %cond1, i1 %cond2, i1 %cond3) { 
+  std::unique_ptr<Module> M =
+      parseIR(C, R"(define void @foo(ptr %i, i1 %cond1, i1 %cond2, i1 %cond3) {
          entry:
            br i1 %cond1, label %if.outer.first, label %if.first.end
          if.outer.first:
@@ -289,26 +291,26 @@ TEST(CodeMoverUtils, IsControlFlowEquivalentImbalanceTest) {
          if.middle.first:
            br i1 %cond3, label %if.inner.first, label %if.first.end
          if.inner.first:
-           store i32 1, i32* %i, align 4
+           store i32 1, ptr %i, align 4
            br label %if.first.end
          if.first.end:
            br i1 %cond2, label %if.outer.second, label %if.second.end
          if.outer.second:
            br i1 %cond3, label %if.inner.second, label %if.second.end
          if.inner.second:
-           store i32 2, i32* %i, align 4
+           store i32 2, ptr %i, align 4
            br label %if.second.end
          if.second.end:
            br i1 %cond1, label %if.outer.third, label %if.third.end
          if.outer.third:
            br i1 %cond1, label %if.inner.third, label %if.third.end
          if.inner.third:
-           store i32 3, i32* %i, align 4
+           store i32 3, ptr %i, align 4
            br label %if.third.end
          if.third.end:
            br i1 %cond1, label %if.fourth, label %if.fourth.end
          if.fourth:
-           store i32 4, i32* %i, align 4
+           store i32 4, ptr %i, align 4
            br label %if.fourth.end
          if.fourth.end:
            ret void
@@ -341,28 +343,28 @@ TEST(CodeMoverUtils, IsControlFlowEquivalentPointerTest) {
   //     i = 3;
   // }
   std::unique_ptr<Module> M =
-      parseIR(C, R"(define void @foo(i32* %i, i32* %cond) {
+      parseIR(C, R"(define void @foo(ptr %i, ptr %cond) {
                  entry:
-                   %0 = load i32, i32* %cond, align 4
+                   %0 = load i32, ptr %cond, align 4
                    %tobool1 = icmp ne i32 %0, 0
                    br i1 %tobool1, label %if.first, label %if.first.end
                  if.first:
-                   store i32 1, i32* %i, align 4
+                   store i32 1, ptr %i, align 4
                    br label %if.first.end
                  if.first.end:
-                   %1 = load i32, i32* %cond, align 4
+                   %1 = load i32, ptr %cond, align 4
                    %tobool2 = icmp ne i32 %1, 0
                    br i1 %tobool2, label %if.second, label %if.second.end
                  if.second:
-                   store i32 2, i32* %i, align 4
+                   store i32 2, ptr %i, align 4
                    br label %if.second.end
                  if.second.end:
-                   store i32 1, i32* %cond, align 4
-                   %2 = load i32, i32* %cond, align 4
+                   store i32 1, ptr %cond, align 4
+                   %2 = load i32, ptr %cond, align 4
                    %tobool3 = icmp ne i32 %2, 0
                    br i1 %tobool3, label %if.third, label %if.third.end
                  if.third:
-                   store i32 3, i32* %i, align 4
+                   store i32 3, ptr %i, align 4
                    br label %if.third.end
                  if.third.end:
                    ret void
@@ -448,7 +450,7 @@ TEST(CodeMoverUtils, IsSafeToMoveTest1) {
   //   }
   // }
   std::unique_ptr<Module> M = parseIR(
-      C, R"(define void @foo(i32* noalias %A, i32* noalias %B, i32* noalias %C
+      C, R"(define void @foo(ptr noalias %A, ptr noalias %B, ptr noalias %C
                            , i64 %N) {
          entry:
            %X = sdiv i64 1, %N
@@ -459,18 +461,18 @@ TEST(CodeMoverUtils, IsSafeToMoveTest1) {
            br i1 %cmp1, label %for.body, label %for.end
          for.body:
            %i = phi i64 [ 0, %entry ], [ %inc, %for.body ]
-           %arrayidx_A5 = getelementptr inbounds i32, i32* %A, i64 5
-           store i32 5, i32* %arrayidx_A5, align 4
-           %arrayidx_A = getelementptr inbounds i32, i32* %A, i64 %i
-           store i32 0, i32* %arrayidx_A, align 4
-           %load1 = load i32, i32* %arrayidx_A, align 4
-           %arrayidx_B = getelementptr inbounds i32, i32* %B, i64 %i
-           store i32 %load1, i32* %arrayidx_B, align 4
-           %load2 = load i32, i32* %arrayidx_A, align 4
-           %arrayidx_C = getelementptr inbounds i32, i32* %C, i64 %i
-           store i32 %load2, i32* %arrayidx_C, align 4
-           %arrayidx_A6 = getelementptr inbounds i32, i32* %A, i64 6
-           store i32 6, i32* %arrayidx_A6, align 4
+           %arrayidx_A5 = getelementptr inbounds i32, ptr %A, i64 5
+           store i32 5, ptr %arrayidx_A5, align 4
+           %arrayidx_A = getelementptr inbounds i32, ptr %A, i64 %i
+           store i32 0, ptr %arrayidx_A, align 4
+           %load1 = load i32, ptr %arrayidx_A, align 4
+           %arrayidx_B = getelementptr inbounds i32, ptr %B, i64 %i
+           store i32 %load1, ptr %arrayidx_B, align 4
+           %load2 = load i32, ptr %arrayidx_A, align 4
+           %arrayidx_C = getelementptr inbounds i32, ptr %C, i64 %i
+           store i32 %load2, ptr %arrayidx_C, align 4
+           %arrayidx_A6 = getelementptr inbounds i32, ptr %A, i64 6
+           store i32 6, ptr %arrayidx_A6, align 4
            %inc = add nsw i64 %i, 1
            %cmp = icmp slt i64 %inc, %N
            br i1 %cmp, label %for.body, label %for.end
@@ -514,8 +516,8 @@ TEST(CodeMoverUtils, IsSafeToMoveTest1) {
 
         // Moving instruction to non control flow equivalent places are not
         // supported.
-        EXPECT_FALSE(isSafeToMoveBefore(*SI_A5, *Entry->getTerminator(), DT,
-                                        &PDT, &DI));
+        EXPECT_FALSE(
+            isSafeToMoveBefore(*SI_A5, *Entry->getTerminator(), DT, &PDT, &DI));
 
         // Moving PHINode is not supported.
         EXPECT_FALSE(isSafeToMoveBefore(PN, *PN.getNextNode()->getNextNode(),
@@ -600,6 +602,8 @@ TEST(CodeMoverUtils, IsSafeToMoveTest3) {
                    br label %for.latch
                  for.latch:
                    %cmp = icmp slt i64 %inc, %N
+                   %add = add i64 100, %N
+                   %add2 = add i64 %add, %N
                    br i1 %cmp, label %for.body, label %for.end
                  for.end:
                    ret void
@@ -610,10 +614,18 @@ TEST(CodeMoverUtils, IsSafeToMoveTest3) {
           DependenceInfo &DI) {
         Instruction *IncInst = getInstructionByName(F, "inc");
         Instruction *CmpInst = getInstructionByName(F, "cmp");
+        BasicBlock *BB0 = getBasicBlockByName(F, "for.body");
+        BasicBlock *BB1 = getBasicBlockByName(F, "for.latch");
 
         // Can move as the incoming block of %inc for %i (%for.latch) dominated
         // by %cmp.
         EXPECT_TRUE(isSafeToMoveBefore(*IncInst, *CmpInst, DT, &PDT, &DI));
+
+        // Can move as the operands of instructions in BB1 either dominate
+        // InsertPoint or appear before that instruction, e.g., %add appears
+        // before %add2 although %add does not dominate InsertPoint.
+        EXPECT_TRUE(
+            isSafeToMoveBefore(*BB1, *BB0->getTerminator(), DT, &PDT, &DI));
       });
 }
 
@@ -627,12 +639,14 @@ TEST(CodeMoverUtils, IsSafeToMoveTest4) {
                  if.then.first:
                    %add = add i32 %op0, %op1
                    %user = add i32 %add, 1
+                   %add2 = add i32 %op0, 1
                    br label %if.end.first
                  if.end.first:
                    br i1 %cond, label %if.end.second, label %if.then.second
                  if.then.second:
                    %sub_op0 = add i32 %op0, 1
                    %sub = sub i32 %sub_op0, %op1
+                   %sub2 = sub i32 %op0, 1
                    br label %if.end.second
                  if.end.second:
                    ret void
@@ -642,7 +656,9 @@ TEST(CodeMoverUtils, IsSafeToMoveTest4) {
       [&](Function &F, DominatorTree &DT, PostDominatorTree &PDT,
           DependenceInfo &DI) {
         Instruction *AddInst = getInstructionByName(F, "add");
+        Instruction *AddInst2 = getInstructionByName(F, "add2");
         Instruction *SubInst = getInstructionByName(F, "sub");
+        Instruction *SubInst2 = getInstructionByName(F, "sub2");
 
         // Cannot move as %user uses %add and %sub doesn't dominates %user.
         EXPECT_FALSE(isSafeToMoveBefore(*AddInst, *SubInst, DT, &PDT, &DI));
@@ -650,5 +666,220 @@ TEST(CodeMoverUtils, IsSafeToMoveTest4) {
         // Cannot move as %sub_op0 is an operand of %sub and %add doesn't
         // dominates %sub_op0.
         EXPECT_FALSE(isSafeToMoveBefore(*SubInst, *AddInst, DT, &PDT, &DI));
+
+        // Can move as %add2 and %sub2 are control flow equivalent,
+        // although %add2 does not strictly dominate %sub2.
+        EXPECT_TRUE(isSafeToMoveBefore(*AddInst2, *SubInst2, DT, &PDT, &DI));
+
+        // Can move as %add2 and %sub2 are control flow equivalent,
+        // although %add2 does not strictly dominate %sub2.
+        EXPECT_TRUE(isSafeToMoveBefore(*SubInst2, *AddInst2, DT, &PDT, &DI));
+
+        BasicBlock *BB0 = getBasicBlockByName(F, "if.then.first");
+        BasicBlock *BB1 = getBasicBlockByName(F, "if.then.second");
+        EXPECT_TRUE(
+            isSafeToMoveBefore(*BB0, *BB1->getTerminator(), DT, &PDT, &DI));
+      });
+}
+
+TEST(CodeMoverUtils, IsSafeToMoveTest5) {
+  LLVMContext C;
+
+  std::unique_ptr<Module> M =
+      parseIR(C, R"(define void @dependence(ptr noalias %A, ptr noalias %B){
+entry:
+    store i32 0, ptr %A, align 4 ; storeA0
+    store i32 2, ptr %A, align 4 ; storeA1
+    %tmp0 = load i32, ptr %A, align 4 ; loadA0
+    store i32 1, ptr %B, align 4 ; storeB0
+    %tmp1 = load i32, ptr %A, align 4 ; loadA1
+    store i32 2, ptr %A, align 4 ; storeA2
+    store i32 4, ptr %B, align 4 ; StoreB1
+    %tmp2 = load i32, ptr %A, align 4 ; loadA2
+    %tmp3 = load i32, ptr %A, align 4 ; loadA3
+    %tmp4 = load i32, ptr %B, align 4 ; loadB2
+    %tmp5 = load i32, ptr %B, align 4 ; loadB3
+    ret void
+})");
+
+  run(*M, "dependence",
+      [&](Function &F, DominatorTree &DT, PostDominatorTree &PDT,
+          DependenceInfo &DI) {
+        Instruction *LoadA0 = getInstructionByName(F, "tmp0");
+        Instruction *LoadA1 = getInstructionByName(F, "tmp1");
+        Instruction *LoadA2 = getInstructionByName(F, "tmp2");
+        Instruction *LoadA3 = getInstructionByName(F, "tmp3");
+        Instruction *LoadB2 = getInstructionByName(F, "tmp4");
+        Instruction *LoadB3 = getInstructionByName(F, "tmp5");
+        Instruction *StoreA1 = LoadA0->getPrevNode();
+        Instruction *StoreA0 = StoreA1->getPrevNode();
+        Instruction *StoreB0 = LoadA0->getNextNode();
+        Instruction *StoreB1 = LoadA2->getPrevNode();
+        Instruction *StoreA2 = StoreB1->getPrevNode();
+
+        // Input forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA2, *LoadB2, DT, &PDT, &DI));
+        // Input backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA3, *LoadA2, DT, &PDT, &DI));
+
+        // Output forward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(*StoreA0, *LoadA0, DT, &PDT, &DI));
+        // Output backward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(*StoreA1, *StoreA0, DT, &PDT, &DI));
+
+        // Flow forward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(*StoreA1, *StoreB0, DT, &PDT, &DI));
+        // Flow backward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(*LoadA0, *StoreA1, DT, &PDT, &DI));
+
+        // Anti forward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(*LoadA1, *StoreB1, DT, &PDT, &DI));
+        // Anti backward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(*StoreA2, *LoadA1, DT, &PDT, &DI));
+
+        // No input backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadB2, *LoadA3, DT, &PDT, &DI));
+        // No input forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA3, *LoadB3, DT, &PDT, &DI));
+
+        // No Output forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*StoreA2, *LoadA2, DT, &PDT, &DI));
+        // No Output backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*StoreB1, *StoreA2, DT, &PDT, &DI));
+
+        // No flow forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*StoreB0, *StoreA2, DT, &PDT, &DI));
+        // No flow backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA1, *StoreB0, DT, &PDT, &DI));
+
+        // No anti backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*StoreB0, *LoadA0, DT, &PDT, &DI));
+        // No anti forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA0, *LoadA1, DT, &PDT, &DI));
+      });
+}
+
+TEST(CodeMoverUtils, IsSafeToMoveTest6) {
+  LLVMContext C;
+
+  std::unique_ptr<Module> M = parseIR(
+      C, R"(define void @dependence(i1 %cond, ptr noalias %A, ptr noalias %B){
+   entry:
+        br i1 %cond, label %bb0, label %bb1
+   bb0:
+        br label %bb1
+    bb1:
+        store i32 0, ptr %A, align 4 ; storeA0
+        br i1 %cond, label %bb2, label %bb3
+    bb2:
+        br label %bb3
+    bb3:
+        store i32 2, ptr %A, align 4 ; storeA1
+        br i1 %cond, label %bb4, label %bb5
+    bb4:
+        br label %bb5
+    bb5:
+        %tmp0 = load i32, ptr %A, align 4 ; loadA0
+        br i1 %cond, label %bb6, label %bb7
+    bb6:
+        br label %bb7
+    bb7:
+        store i32 1, ptr %B, align 4 ; storeB0
+        br i1 %cond, label %bb8, label %bb9
+    bb8:
+        br label %bb9
+    bb9:
+        %tmp1 = load i32, ptr %A, align 4 ; loadA1
+        br i1 %cond, label %bb10, label %bb11
+    bb10:
+        br label %bb11
+    bb11:
+        store i32 2, ptr %A, align 4 ; storeA2
+        br i1 %cond, label %bb12, label %bb13
+    bb12:
+        br label %bb13
+    bb13:
+        store i32 4, ptr %B, align 4 ; StoreB1
+        br i1 %cond, label %bb14, label %bb15
+    bb14:
+        br label %bb15
+    bb15:
+        %tmp2 = load i32, ptr %A, align 4 ; loadA2
+        br i1 %cond, label %bb16, label %bb17
+    bb16:
+        br label %bb17
+    bb17:
+        %tmp3 = load i32, ptr %A, align 4 ; loadA3
+        br i1 %cond, label %bb18, label %bb19
+    bb18:
+        br label %bb19
+    bb19:
+        %tmp4 = load i32, ptr %B, align 4 ; loadB2
+        br i1 %cond, label %bb20, label %bb21
+    bb20:
+       br label %bb21
+    bb21:
+       %tmp5 = load i32, ptr %B, align 4 ; loadB3
+       ret void
+   })");
+  run(*M, "dependence",
+      [&](Function &F, DominatorTree &DT, PostDominatorTree &PDT,
+          DependenceInfo &DI) {
+        BasicBlock *BB1 = getBasicBlockByName(F, "bb1");
+        BasicBlock *BB3 = getBasicBlockByName(F, "bb3");
+        BasicBlock *BB7 = getBasicBlockByName(F, "bb7");
+        BasicBlock *BB11 = getBasicBlockByName(F, "bb11");
+        BasicBlock *BB13 = getBasicBlockByName(F, "bb13");
+        Instruction *LoadA0 = getInstructionByName(F, "tmp0");
+        Instruction *LoadA1 = getInstructionByName(F, "tmp1");
+        Instruction *LoadA2 = getInstructionByName(F, "tmp2");
+        Instruction *LoadA3 = getInstructionByName(F, "tmp3");
+        Instruction *LoadB2 = getInstructionByName(F, "tmp4");
+        Instruction *LoadB3 = getInstructionByName(F, "tmp5");
+        Instruction &StoreA1 = BB3->front();
+        Instruction &StoreA0 = BB1->front();
+        Instruction &StoreB0 = BB7->front();
+        Instruction &StoreB1 = BB13->front();
+        Instruction &StoreA2 = BB11->front();
+
+        // Input forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA2, *LoadB2, DT, &PDT, &DI));
+        // Input backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA3, *LoadA2, DT, &PDT, &DI));
+
+        // Output forward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(StoreA0, *LoadA0, DT, &PDT, &DI));
+        // Output backward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(StoreA1, StoreA0, DT, &PDT, &DI));
+
+        // Flow forward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(StoreA1, StoreB0, DT, &PDT, &DI));
+        // Flow backward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(*LoadA0, StoreA1, DT, &PDT, &DI));
+
+        // Anti forward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(*LoadA1, StoreB1, DT, &PDT, &DI));
+        // Anti backward dependency
+        EXPECT_FALSE(isSafeToMoveBefore(StoreA2, *LoadA1, DT, &PDT, &DI));
+
+        // No input backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadB2, *LoadA3, DT, &PDT, &DI));
+        // No input forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA3, *LoadB3, DT, &PDT, &DI));
+
+        // No Output forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(StoreA2, *LoadA2, DT, &PDT, &DI));
+        // No Output backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(StoreB1, StoreA2, DT, &PDT, &DI));
+
+        // No flow forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(StoreB0, StoreA2, DT, &PDT, &DI));
+        // No flow backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA1, StoreB0, DT, &PDT, &DI));
+
+        // No anti backward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(StoreB0, *LoadA0, DT, &PDT, &DI));
+        // No anti forward dependency
+        EXPECT_TRUE(isSafeToMoveBefore(*LoadA0, *LoadA1, DT, &PDT, &DI));
       });
 }

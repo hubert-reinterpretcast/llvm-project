@@ -8,33 +8,28 @@
 
 #include "llvm/IR/Use.h"
 #include "llvm/IR/User.h"
-#include "llvm/IR/Value.h"
-#include <new>
 
-namespace llvm {
+using namespace llvm;
 
 void Use::swap(Use &RHS) {
   if (Val == RHS.Val)
     return;
 
-  if (Val)
-    removeFromList();
+  std::swap(Val, RHS.Val);
+  std::swap(Next, RHS.Next);
+  std::swap(Prev, RHS.Prev);
 
-  Value *OldVal = Val;
-  if (RHS.Val) {
-    RHS.removeFromList();
-    Val = RHS.Val;
-    Val->addUse(*this);
-  } else {
-    Val = nullptr;
-  }
+  if (Prev)
+    *Prev = this;
 
-  if (OldVal) {
-    RHS.Val = OldVal;
-    RHS.Val->addUse(RHS);
-  } else {
-    RHS.Val = nullptr;
-  }
+  if (Next)
+    Next->Prev = &Next;
+
+  if (RHS.Prev)
+    *RHS.Prev = &RHS;
+
+  if (RHS.Next)
+    RHS.Next->Prev = &RHS.Next;
 }
 
 unsigned Use::getOperandNo() const {
@@ -47,5 +42,3 @@ void Use::zap(Use *Start, const Use *Stop, bool del) {
   if (del)
     ::operator delete(Start);
 }
-
-} // namespace llvm

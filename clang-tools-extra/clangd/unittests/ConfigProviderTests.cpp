@@ -10,10 +10,12 @@
 #include "ConfigProvider.h"
 #include "ConfigTesting.h"
 #include "TestFS.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/SourceMgr.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "llvm/Support/SourceMgr.h"
 #include <atomic>
+#include <chrono>
 
 namespace clang {
 namespace clangd {
@@ -56,19 +58,18 @@ std::vector<std::string> getAddedArgs(Config &C) {
 // cache their results.
 TEST(ProviderTest, Combine) {
   CapturedDiags Diags;
-  std::vector<std::unique_ptr<Provider>> Providers;
-  Providers.push_back(std::make_unique<FakeProvider>("foo"));
-  Providers.push_back(std::make_unique<FakeProvider>("bar"));
-  auto Combined = Provider::combine(std::move(Providers));
+  FakeProvider Foo("foo");
+  FakeProvider Bar("bar");
+  auto Combined = Provider::combine({&Foo, &Bar});
   Config Cfg = Combined->getConfig(Params(), Diags.callback());
   EXPECT_THAT(Diags.Diagnostics,
-              ElementsAre(DiagMessage("foo"), DiagMessage("bar")));
+              ElementsAre(diagMessage("foo"), diagMessage("bar")));
   EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("foo1", "bar1"));
   Diags.Diagnostics.clear();
 
   Cfg = Combined->getConfig(Params(), Diags.callback());
   EXPECT_THAT(Diags.Diagnostics,
-              ElementsAre(DiagMessage("foo"), DiagMessage("bar")));
+              ElementsAre(diagMessage("foo"), diagMessage("bar")));
   EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("foo2", "bar2"));
 }
 
@@ -76,6 +77,12 @@ const char *AddFooWithErr = R"yaml(
 CompileFlags:
   Add: foo
   Unknown: 42
+)yaml";
+
+const char *AddFooWithTypoErr = R"yaml(
+CompileFlags:
+  Add: foo
+  Removr: 42
 )yaml";
 
 const char *AddBarBaz = R"yaml(
@@ -91,25 +98,40 @@ TEST(ProviderTest, FromYAMLFile) {
   FS.Files["foo.yaml"] = AddFooWithErr;
 
   CapturedDiags Diags;
-  auto P = Provider::fromYAMLFile(testPath("foo.yaml"), FS);
+  auto P = Provider::fromYAMLFile(testPath("foo.yaml"), /*Directory=*/"", FS);
   auto Cfg = P->getConfig(Params(), Diags.callback());
   EXPECT_THAT(Diags.Diagnostics,
-              ElementsAre(DiagMessage("Unknown CompileFlags key Unknown")));
+              ElementsAre(diagMessage("Unknown CompileFlags key 'Unknown'")));
+  EXPECT_THAT(Diags.Files, ElementsAre(testPath("foo.yaml")));
   EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("foo"));
-  Diags.Diagnostics.clear();
+  Diags.clear();
 
   Cfg = P->getConfig(Params(), Diags.callback());
   EXPECT_THAT(Diags.Diagnostics, IsEmpty()) << "Cached, not re-parsed";
+  EXPECT_THAT(Diags.Files, IsEmpty());
   EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("foo"));
+
+  FS.Files["foo.yaml"] = AddFooWithTypoErr;
+  Cfg = P->getConfig(Params(), Diags.callback());
+  EXPECT_THAT(
+      Diags.Diagnostics,
+      ElementsAre(diagMessage(
+          "Unknown CompileFlags key 'Removr'; did you mean 'Remove'?")));
+  EXPECT_THAT(Diags.Files, ElementsAre(testPath("foo.yaml")));
+  EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("foo"));
+  Diags.clear();
 
   FS.Files["foo.yaml"] = AddBarBaz;
   Cfg = P->getConfig(Params(), Diags.callback());
   EXPECT_THAT(Diags.Diagnostics, IsEmpty()) << "New config, no errors";
+  EXPECT_THAT(Diags.Files, ElementsAre(testPath("foo.yaml")));
   EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("bar", "baz"));
+  Diags.clear();
 
   FS.Files.erase("foo.yaml");
   Cfg = P->getConfig(Params(), Diags.callback());
   EXPECT_THAT(Diags.Diagnostics, IsEmpty()) << "Missing file is not an error";
+  EXPECT_THAT(Diags.Files, IsEmpty());
   EXPECT_THAT(getAddedArgs(Cfg), IsEmpty());
 }
 
@@ -132,24 +154,61 @@ TEST(ProviderTest, FromAncestorRelativeYAMLFiles) {
 
   auto Cfg = P->getConfig(Params(), Diags.callback());
   EXPECT_THAT(Diags.Diagnostics, IsEmpty());
+  EXPECT_THAT(Diags.Files, IsEmpty());
   EXPECT_THAT(getAddedArgs(Cfg), IsEmpty());
 
   Cfg = P->getConfig(ABCParams, Diags.callback());
   EXPECT_THAT(Diags.Diagnostics,
-              ElementsAre(DiagMessage("Unknown CompileFlags key Unknown")));
+              ElementsAre(diagMessage("Unknown CompileFlags key 'Unknown'")));
+  // FIXME: fails on windows: paths have mixed slashes like C:\a/b\c.yaml
+  EXPECT_THAT(Diags.Files,
+              ElementsAre(testPath("a/foo.yaml"), testPath("a/b/c/foo.yaml")));
   EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("foo", "bar", "baz"));
-  Diags.Diagnostics.clear();
+  Diags.clear();
 
   Cfg = P->getConfig(AParams, Diags.callback());
   EXPECT_THAT(Diags.Diagnostics, IsEmpty()) << "Cached config";
+  EXPECT_THAT(Diags.Files, IsEmpty());
   EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("foo"));
 
   FS.Files.erase("a/foo.yaml");
   Cfg = P->getConfig(ABCParams, Diags.callback());
   EXPECT_THAT(Diags.Diagnostics, IsEmpty());
+  EXPECT_THAT(Diags.Files, IsEmpty());
   EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("bar", "baz"));
 }
 
+TEST(ProviderTest, SourceInfo) {
+  MockFS FS;
+
+  FS.Files["baz/foo.yaml"] = R"yaml(
+If:
+  PathMatch: .*
+  PathExclude: bar.h
+CompileFlags:
+  Add: bar
+)yaml";
+  const auto BarPath = testPath("baz/bar.h", llvm::sys::path::Style::posix);
+  CapturedDiags Diags;
+  Params Bar;
+  Bar.Path = BarPath;
+
+  // This should be an absolute match/exclude hence baz/bar.h should not be
+  // excluded.
+  auto P =
+      Provider::fromYAMLFile(testPath("baz/foo.yaml"), /*Directory=*/"", FS);
+  auto Cfg = P->getConfig(Bar, Diags.callback());
+  ASSERT_THAT(Diags.Diagnostics, IsEmpty());
+  EXPECT_THAT(getAddedArgs(Cfg), ElementsAre("bar"));
+  Diags.clear();
+
+  // This should be a relative match/exclude hence baz/bar.h should be excluded.
+  P = Provider::fromAncestorRelativeYAMLFiles("foo.yaml", FS);
+  Cfg = P->getConfig(Bar, Diags.callback());
+  ASSERT_THAT(Diags.Diagnostics, IsEmpty());
+  EXPECT_THAT(getAddedArgs(Cfg), IsEmpty());
+  Diags.clear();
+}
 } // namespace
 } // namespace config
 } // namespace clangd

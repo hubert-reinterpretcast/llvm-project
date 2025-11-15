@@ -12,10 +12,10 @@
 
 #include "polly/JSONExporter.h"
 #include "polly/DependenceInfo.h"
-#include "polly/LinkAllPasses.h"
 #include "polly/Options.h"
 #include "polly/ScopInfo.h"
 #include "polly/ScopPass.h"
+#include "polly/Support/ISLTools.h"
 #include "polly/Support/ScopLocation.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/Module.h"
@@ -35,6 +35,11 @@ using namespace polly;
 
 #define DEBUG_TYPE "polly-import-jscop"
 
+static cl::opt<bool>
+    PollyPrintImportJscop("polly-print-import-jscop",
+                          cl::desc("Polly - Print Scop import result"),
+                          cl::cat(PollyCategory));
+
 STATISTIC(NewAccessMapFound, "Number of updated access functions");
 
 namespace {
@@ -49,34 +54,6 @@ static cl::opt<std::string>
                   cl::desc("Postfix to append to the import .jsop files."),
                   cl::Hidden, cl::value_desc("File postfix"), cl::ValueRequired,
                   cl::init(""), cl::cat(PollyCategory));
-
-struct JSONExporter : public ScopPass {
-  static char ID;
-  explicit JSONExporter() : ScopPass(ID) {}
-
-  /// Export the SCoP @p S to a JSON file.
-  bool runOnScop(Scop &S) override;
-
-  /// Print the SCoP @p S as it is exported.
-  void printScop(raw_ostream &OS, Scop &S) const override;
-
-  /// Register all analyses and transformation required.
-  void getAnalysisUsage(AnalysisUsage &AU) const override;
-};
-
-struct JSONImporter : public ScopPass {
-  static char ID;
-  std::vector<std::string> NewAccessStrings;
-  explicit JSONImporter() : ScopPass(ID) {}
-  /// Import new access functions for SCoP @p S from a JSON file.
-  bool runOnScop(Scop &S) override;
-
-  /// Print the SCoP @p S and the imported access functions.
-  void printScop(raw_ostream &OS, Scop &S) const override;
-
-  /// Register all analyses and transformation required.
-  void getAnalysisUsage(AnalysisUsage &AU) const override;
-};
 } // namespace
 
 static std::string getFileName(Scop &S, StringRef Suffix = "") {
@@ -113,12 +90,12 @@ static json::Array exportArrays(const Scop &S) {
     }
     for (; i < SAI->getNumberOfDimensions(); i++) {
       SAI->getDimensionSize(i)->print(RawStringOstream);
-      Sizes.push_back(RawStringOstream.str());
+      Sizes.push_back(Buffer);
       Buffer.clear();
     }
     Array["sizes"] = std::move(Sizes);
     SAI->getElementType()->print(RawStringOstream);
-    Array["type"] = RawStringOstream.str();
+    Array["type"] = Buffer;
     Buffer.clear();
     Arrays.push_back(std::move(Array));
   }
@@ -178,7 +155,7 @@ static void exportScop(Scop &S) {
 
   // Write to file.
   std::error_code EC;
-  ToolOutputFile F(FileName, EC, llvm::sys::fs::OF_Text);
+  ToolOutputFile F(FileName, EC, llvm::sys::fs::OF_TextWithCRLF);
 
   std::string FunctionName = S.getFunction().getName().str();
   errs() << "Writing JScop '" << S.getNameStr() << "' in function '"
@@ -215,11 +192,11 @@ static bool importContext(Scop &S, const json::Object &JScop) {
     return false;
   }
 
-  isl::set NewContext = isl::set{S.getIslCtx().get(),
-                                 JScop.getString("context").getValue().str()};
+  isl::set NewContext =
+      isl::set{S.getIslCtx().get(), JScop.getString("context").value().str()};
 
   // Check whether the context was parsed successfully.
-  if (!NewContext) {
+  if (NewContext.is_null()) {
     errs() << "The context was not parsed successfully by ISL.\n";
     return false;
   }
@@ -230,8 +207,8 @@ static bool importContext(Scop &S, const json::Object &JScop) {
     return false;
   }
 
-  unsigned OldContextDim = OldContext.dim(isl::dim::param);
-  unsigned NewContextDim = NewContext.dim(isl::dim::param);
+  unsigned OldContextDim = unsignedFromIslSize(OldContext.dim(isl::dim::param));
+  unsigned NewContextDim = unsignedFromIslSize(NewContext.dim(isl::dim::param));
 
   // Check if the imported context has the right number of parameters.
   if (OldContextDim != NewContextDim) {
@@ -285,12 +262,12 @@ static bool importSchedule(Scop &S, const json::Object &JScop,
       errs() << "Statement " << Index << " has no 'schedule' key.\n";
       return false;
     }
-    Optional<StringRef> Schedule =
+    std::optional<StringRef> Schedule =
         statements[Index].getAsObject()->getString("schedule");
-    assert(Schedule.hasValue() &&
+    assert(Schedule.has_value() &&
            "Schedules that contain extension nodes require special handling.");
     isl_map *Map = isl_map_read_from_str(S.getIslCtx().get(),
-                                         Schedule.getValue().str().c_str());
+                                         Schedule.value().str().c_str());
 
     // Check whether the schedule was parsed successfully
     if (!Map) {
@@ -321,12 +298,12 @@ static bool importSchedule(Scop &S, const json::Object &JScop,
     return false;
   }
 
-  auto ScheduleMap = isl::union_map::empty(S.getParamSpace());
+  auto ScheduleMap = isl::union_map::empty(S.getIslCtx());
   for (ScopStmt &Stmt : S) {
-    if (NewSchedule.find(&Stmt) != NewSchedule.end())
-      ScheduleMap = ScheduleMap.add_map(NewSchedule[&Stmt]);
+    if (NewSchedule.contains(&Stmt))
+      ScheduleMap = ScheduleMap.unite(NewSchedule[&Stmt]);
     else
-      ScheduleMap = ScheduleMap.add_map(Stmt.getSchedule());
+      ScheduleMap = ScheduleMap.unite(Stmt.getSchedule());
   }
 
   S.setSchedule(ScheduleMap);
@@ -394,7 +371,7 @@ importAccesses(Scop &S, const json::Object &JScop, const DataLayout &DL,
                << StatementIdx << ".\n";
         return false;
       }
-      StringRef Accesses = JsonMemoryAccess->getString("relation").getValue();
+      StringRef Accesses = *JsonMemoryAccess->getString("relation");
       isl_map *NewAccessMap =
           isl_map_read_from_str(S.getIslCtx().get(), Accesses.str().c_str());
 
@@ -448,14 +425,12 @@ importAccesses(Scop &S, const json::Object &JScop, const DataLayout &DL,
         bool SpecialAlignment = true;
         if (LoadInst *LoadI = dyn_cast<LoadInst>(MA->getAccessInstruction())) {
           SpecialAlignment =
-              LoadI->getAlignment() &&
-              DL.getABITypeAlignment(LoadI->getType()) != LoadI->getAlignment();
+              DL.getABITypeAlign(LoadI->getType()) != LoadI->getAlign();
         } else if (StoreInst *StoreI =
                        dyn_cast<StoreInst>(MA->getAccessInstruction())) {
           SpecialAlignment =
-              StoreI->getAlignment() &&
-              DL.getABITypeAlignment(StoreI->getValueOperand()->getType()) !=
-                  StoreI->getAlignment();
+              DL.getABITypeAlign(StoreI->getValueOperand()->getType()) !=
+              StoreI->getAlign();
         }
 
         if (SpecialAlignment) {
@@ -565,7 +540,7 @@ static bool areArraysEqual(ScopArrayInfo *SAI, const json::Object &Array) {
     return false;
   }
 
-  if (SAI->getName() != Array.getString("name").getValue())
+  if (SAI->getName() != *Array.getString("name"))
     return false;
 
   if (SAI->getNumberOfDimensions() != Array.getArray("sizes")->size())
@@ -574,14 +549,14 @@ static bool areArraysEqual(ScopArrayInfo *SAI, const json::Object &Array) {
   for (unsigned i = 1; i < Array.getArray("sizes")->size(); i++) {
     SAI->getDimensionSize(i)->print(RawStringOstream);
     const json::Array &SizesArray = *Array.getArray("sizes");
-    if (RawStringOstream.str() != SizesArray[i].getAsString().getValue())
+    if (Buffer != SizesArray[i].getAsString().value())
       return false;
     Buffer.clear();
   }
 
   // Check if key 'type' differs from the current one or is not valid.
   SAI->getElementType()->print(RawStringOstream);
-  if (RawStringOstream.str() != Array.getString("type").getValue()) {
+  if (Buffer != Array.getString("type").value()) {
     errs() << "Array has not a valid type.\n";
     return false;
   }
@@ -652,7 +627,7 @@ static bool importArrays(Scop &S, const json::Object &JScop) {
   for (; ArrayIdx < Arrays.size(); ArrayIdx++) {
     const json::Object &Array = *Arrays[ArrayIdx].getAsObject();
     auto *ElementType =
-        parseTextType(Array.get("type")->getAsString().getValue().str(),
+        parseTextType(Array.get("type")->getAsString().value().str(),
                       S.getSE()->getContext());
     if (!ElementType) {
       errs() << "Error while parsing element type for new array.\n";
@@ -661,7 +636,7 @@ static bool importArrays(Scop &S, const json::Object &JScop) {
     const json::Array &SizesArray = *Array.getArray("sizes");
     std::vector<unsigned> DimSizes;
     for (unsigned i = 0; i < SizesArray.size(); i++) {
-      auto Size = std::stoi(SizesArray[i].getAsString().getValue().str());
+      auto Size = std::stoi(SizesArray[i].getAsString()->str());
 
       // Check if the size if positive.
       if (Size <= 0) {
@@ -673,10 +648,10 @@ static bool importArrays(Scop &S, const json::Object &JScop) {
     }
 
     auto NewSAI = S.createScopArrayInfo(
-        ElementType, Array.getString("name").getValue().str(), DimSizes);
+        ElementType, Array.getString("name").value().str(), DimSizes);
 
     if (Array.get("allocation")) {
-      NewSAI->setIsOnHeap(Array.getString("allocation").getValue() == "heap");
+      NewSAI->setIsOnHeap(Array.getString("allocation").value() == "heap");
     }
   }
 
@@ -741,58 +716,12 @@ static bool importScop(Scop &S, const Dependences &D, const DataLayout &DL,
   return true;
 }
 
-char JSONExporter::ID = 0;
-void JSONExporter::printScop(raw_ostream &OS, Scop &S) const { OS << S; }
-
-bool JSONExporter::runOnScop(Scop &S) {
-  exportScop(S);
-  return false;
-}
-
-void JSONExporter::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.setPreservesAll();
-  AU.addRequired<ScopInfoRegionPass>();
-}
-
-Pass *polly::createJSONExporterPass() { return new JSONExporter(); }
-
 PreservedAnalyses JSONExportPass::run(Scop &S, ScopAnalysisManager &SAM,
                                       ScopStandardAnalysisResults &SAR,
                                       SPMUpdater &) {
   exportScop(S);
   return PreservedAnalyses::all();
 }
-
-char JSONImporter::ID = 0;
-
-void JSONImporter::printScop(raw_ostream &OS, Scop &S) const {
-  OS << S;
-  for (std::vector<std::string>::const_iterator I = NewAccessStrings.begin(),
-                                                E = NewAccessStrings.end();
-       I != E; I++)
-    OS << "New access function '" << *I << "' detected in JSCOP file\n";
-}
-
-bool JSONImporter::runOnScop(Scop &S) {
-  const Dependences &D =
-      getAnalysis<DependenceInfo>().getDependences(Dependences::AL_Statement);
-  const DataLayout &DL = S.getFunction().getParent()->getDataLayout();
-
-  if (!importScop(S, D, DL, &NewAccessStrings))
-    report_fatal_error("Tried to import a malformed jscop file.");
-
-  return false;
-}
-
-void JSONImporter::getAnalysisUsage(AnalysisUsage &AU) const {
-  ScopPass::getAnalysisUsage(AU);
-  AU.addRequired<DependenceInfo>();
-
-  // TODO: JSONImporter should throw away DependenceInfo.
-  AU.addPreserved<DependenceInfo>();
-}
-
-Pass *polly::createJSONImporterPass() { return new JSONImporter(); }
 
 PreservedAnalyses JSONImportPass::run(Scop &S, ScopAnalysisManager &SAM,
                                       ScopStandardAnalysisResults &SAR,
@@ -813,22 +742,24 @@ PreservedAnalyses JSONImportPass::run(Scop &S, ScopAnalysisManager &SAM,
   return PA;
 }
 
-INITIALIZE_PASS_BEGIN(JSONExporter, "polly-export-jscop",
-                      "Polly - Export Scops as JSON"
-                      " (Writes a .jscop file for each Scop)",
-                      false, false);
-INITIALIZE_PASS_DEPENDENCY(DependenceInfo)
-INITIALIZE_PASS_END(JSONExporter, "polly-export-jscop",
-                    "Polly - Export Scops as JSON"
-                    " (Writes a .jscop file for each Scop)",
-                    false, false)
+void polly::runImportJSON(Scop &S, DependenceAnalysis::Result &DA) {
+  const Dependences &D = DA.getDependences(Dependences::AL_Statement);
+  const DataLayout &DL = S.getFunction().getParent()->getDataLayout();
+  std::vector<std::string> NewAccessStrings;
+  if (!importScop(S, D, DL, &NewAccessStrings))
+    report_fatal_error("Tried to import a malformed jscop file.");
 
-INITIALIZE_PASS_BEGIN(JSONImporter, "polly-import-jscop",
-                      "Polly - Import Scops from JSON"
-                      " (Reads a .jscop file for each Scop)",
-                      false, false);
-INITIALIZE_PASS_DEPENDENCY(DependenceInfo)
-INITIALIZE_PASS_END(JSONImporter, "polly-import-jscop",
-                    "Polly - Import Scops from JSON"
-                    " (Reads a .jscop file for each Scop)",
-                    false, false)
+  if (PollyPrintImportJscop) {
+    outs()
+        << "Printing analysis 'Polly - Print Scop import result' for region: '"
+        << S.getRegion().getNameStr() << "' in function '"
+        << S.getFunction().getName() << "':\n";
+    outs() << S;
+    for (std::vector<std::string>::const_iterator I = NewAccessStrings.begin(),
+                                                  E = NewAccessStrings.end();
+         I != E; I++)
+      outs() << "New access function '" << *I << "' detected in JSCOP file\n";
+  }
+}
+
+void polly::runExportJSON(Scop &S) { exportScop(S); }

@@ -12,37 +12,60 @@
 // template <class T, class... Args>
 //   constexpr optional<T> make_optional(Args&&... args);
 
+// GCC crashes on this file, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=120577
+// XFAIL: gcc-15
+
+#include <cassert>
+#include <memory>
 #include <optional>
 #include <string>
-#include <memory>
-#include <cassert>
+#include <string_view>
 
 #include "test_macros.h"
 
+template <typename T>
+constexpr bool test_ref() {
+  T i{0};
+  auto opt = std::make_optional<T&>(i);
+
+#if TEST_STD_VER < 26
+  assert((std::is_same_v<decltype(opt), std::optional<T>>));
+#else
+  assert((std::is_same_v<decltype(opt), std::optional<T&>>));
+#endif
+
+  assert(*opt == 0);
+
+  return true;
+}
+
 int main(int, char**)
 {
-    using std::optional;
-    using std::make_optional;
-
     {
-        constexpr auto opt = make_optional<int>('a');
-        static_assert(*opt == int('a'), "");
+        constexpr auto opt = std::make_optional<int>('a');
+        static_assert(*opt == int('a'));
     }
     {
-        std::string s("123");
-        auto opt = make_optional<std::string>(s);
-        assert(*opt == s);
+        std::string s = "123";
+        auto opt = std::make_optional<std::string>(s);
+        assert(*opt == "123");
     }
     {
-        std::unique_ptr<int> s(new int(3));
-        auto opt = make_optional<std::unique_ptr<int>>(std::move(s));
+        std::unique_ptr<int> s = std::make_unique<int>(3);
+        auto opt = std::make_optional<std::unique_ptr<int>>(std::move(s));
         assert(**opt == 3);
         assert(s == nullptr);
     }
     {
-        auto opt = make_optional<std::string>(4u, 'X');
+        auto opt = std::make_optional<std::string>(4u, 'X');
         assert(*opt == "XXXX");
     }
+    using namespace std::string_view_literals;
 
-  return 0;
+    static_assert(test_ref<int>());
+    assert((test_ref<int>()));
+    static_assert(test_ref<double>());
+    assert((test_ref<double>()));
+
+    return 0;
 }

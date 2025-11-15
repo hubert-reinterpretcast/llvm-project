@@ -11,11 +11,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "lld/Common/Filesystem.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Parallel.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/TimeProfiler.h"
 #if LLVM_ON_UNIX
 #include <unistd.h>
 #endif
@@ -40,6 +42,9 @@ using namespace lld;
 // This function spawns a background thread to remove the file.
 // The calling thread returns almost immediately.
 void lld::unlinkAsync(StringRef path) {
+  if (!sys::fs::exists(path) || !sys::fs::is_regular_file(path))
+    return;
+
 // Removing a file is async on windows.
 #if defined(_WIN32)
   // On Windows co-operative programs can be expected to open LLD's
@@ -54,7 +59,7 @@ void lld::unlinkAsync(StringRef path) {
   //
   // The code here allows LLD to work on all versions of Windows.
   // However, at Windows 10 1903 it seems that the behavior of
-  // Windows has changed, so that we could simply delete the output 
+  // Windows has changed, so that we could simply delete the output
   // file. This code should be simplified once support for older
   // versions of Windows is dropped.
   //
@@ -71,8 +76,7 @@ void lld::unlinkAsync(StringRef path) {
   }
   sys::fs::remove(path);
 #else
-  if (parallel::strategy.ThreadsRequested == 1 || !sys::fs::exists(path) ||
-      !sys::fs::is_regular_file(path))
+  if (parallel::strategy.ThreadsRequested == 1)
     return;
 
   // We cannot just remove path from a different thread because we are now going
@@ -119,9 +123,35 @@ void lld::unlinkAsync(StringRef path) {
 // is called. We use that class without calling commit() to predict
 // if the given file is writable.
 std::error_code lld::tryCreateFile(StringRef path) {
+  llvm::TimeTraceScope timeScope("Try create output file");
   if (path.empty())
     return std::error_code();
   if (path == "-")
     return std::error_code();
   return errorToErrorCode(FileOutputBuffer::create(path, 1).takeError());
+}
+
+// Creates an empty file to and returns a raw_fd_ostream to write to it.
+std::unique_ptr<raw_fd_ostream> lld::openFile(StringRef file) {
+  std::error_code ec;
+  auto ret =
+      std::make_unique<raw_fd_ostream>(file, ec, sys::fs::OpenFlags::OF_None);
+  if (ec) {
+    error("cannot open " + file + ": " + ec.message());
+    return nullptr;
+  }
+  return ret;
+}
+
+// The merged bitcode after LTO is large. Try opening a file stream that
+// supports reading, seeking and writing. Such a file allows BitcodeWriter to
+// flush buffered data to reduce memory consumption. If this fails, open a file
+// stream that supports only write.
+std::unique_ptr<raw_fd_ostream> lld::openLTOOutputFile(StringRef file) {
+  std::error_code ec;
+  std::unique_ptr<raw_fd_ostream> fs =
+      std::make_unique<raw_fd_stream>(file, ec);
+  if (!ec)
+    return fs;
+  return openFile(file);
 }

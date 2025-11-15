@@ -1,4 +1,4 @@
-//===--- ClangTidyModule.h - clang-tidy -------------------------*- C++ -*-===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,12 +13,9 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include <functional>
-#include <map>
 #include <memory>
-#include <string>
 
-namespace clang {
-namespace tidy {
+namespace clang::tidy {
 
 class ClangTidyCheck;
 class ClangTidyContext;
@@ -65,11 +62,17 @@ public:
                          });
   }
 
+  void eraseCheck(llvm::StringRef CheckName) { Factories.erase(CheckName); }
+
   /// Create instances of checks that are enabled.
   std::vector<std::unique_ptr<ClangTidyCheck>>
-  createChecks(ClangTidyContext *Context);
+  createChecks(ClangTidyContext *Context) const;
 
-  typedef std::map<std::string, CheckFactory> FactoryMap;
+  /// Create instances of checks that are enabled for the current Language.
+  std::vector<std::unique_ptr<ClangTidyCheck>>
+  createChecksForLanguage(ClangTidyContext *Context) const;
+
+  using FactoryMap = llvm::StringMap<CheckFactory>;
   FactoryMap::const_iterator begin() const { return Factories.begin(); }
   FactoryMap::const_iterator end() const { return Factories.end(); }
   bool empty() const { return Factories.empty(); }
@@ -82,7 +85,7 @@ private:
 /// them a prefixed name.
 class ClangTidyModule {
 public:
-  virtual ~ClangTidyModule() {}
+  virtual ~ClangTidyModule() = default;
 
   /// Implement this function in order to register all \c CheckFactories
   /// belonging to this module.
@@ -92,7 +95,6 @@ public:
   virtual ClangTidyOptions getModuleOptions();
 };
 
-} // end namespace tidy
-} // end namespace clang
+} // namespace clang::tidy
 
 #endif // LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_CLANGTIDYMODULE_H

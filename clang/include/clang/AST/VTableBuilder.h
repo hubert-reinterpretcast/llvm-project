@@ -18,6 +18,7 @@
 #include "clang/AST/GlobalDecl.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/Basic/ABI.h"
+#include "clang/Basic/Thunk.h"
 #include "llvm/ADT/DenseMap.h"
 #include <memory>
 #include <utility>
@@ -149,7 +150,7 @@ public:
 
   bool isRTTIKind() const { return isRTTIKind(getKind()); }
 
-  GlobalDecl getGlobalDecl() const {
+  GlobalDecl getGlobalDecl(bool HasVectorDeletingDtors) const {
     assert(isUsedFunctionPointerKind() &&
            "GlobalDecl can be created only from virtual function");
 
@@ -160,7 +161,9 @@ public:
     case CK_CompleteDtorPointer:
       return GlobalDecl(DtorDecl, CXXDtorType::Dtor_Complete);
     case CK_DeletingDtorPointer:
-      return GlobalDecl(DtorDecl, CXXDtorType::Dtor_Deleting);
+      return GlobalDecl(DtorDecl, (HasVectorDeletingDtors)
+                                      ? CXXDtorType::Dtor_VectorDeleting
+                                      : CXXDtorType::Dtor_Deleting);
     case CK_VCallOffset:
     case CK_VBaseOffset:
     case CK_OffsetToTop:
@@ -278,7 +281,7 @@ public:
 
   AddressPointLocation getAddressPoint(BaseSubobject Base) const {
     assert(AddressPoints.count(Base) && "Did not find address point!");
-    return AddressPoints.find(Base)->second;
+    return AddressPoints.lookup(Base);
   }
 
   const AddressPointsMapTy &getAddressPoints() const {
@@ -360,6 +363,10 @@ public:
 };
 
 class ItaniumVTableContext : public VTableContextBase {
+public:
+  typedef llvm::DenseMap<const CXXMethodDecl *, const CXXMethodDecl *>
+      OriginalMethodMapTy;
+
 private:
 
   /// Contains the index (relative to the vtable address point)
@@ -382,6 +389,10 @@ private:
   typedef llvm::DenseMap<ClassPairTy, CharUnits>
     VirtualBaseClassOffsetOffsetsMapTy;
   VirtualBaseClassOffsetOffsetsMapTy VirtualBaseClassOffsetOffsets;
+
+  /// Map from a virtual method to the nearest method in the primary base class
+  /// chain that it overrides.
+  OriginalMethodMapTy OriginalMethodMap;
 
   void computeVTableRelatedInformation(const CXXRecordDecl *RD) override;
 
@@ -423,6 +434,27 @@ public:
   /// Base must be a virtual base class or an unambiguous base.
   CharUnits getVirtualBaseOffsetOffset(const CXXRecordDecl *RD,
                                        const CXXRecordDecl *VBase);
+
+  /// Return the method that added the v-table slot that will be used to call
+  /// the given method.
+  ///
+  /// In the Itanium ABI, where overrides always cause methods to be added to
+  /// the primary v-table if they're not already there, this will be the first
+  /// declaration in the primary base class chain for which the return type
+  /// adjustment is trivial.
+  GlobalDecl findOriginalMethod(GlobalDecl GD);
+
+  const CXXMethodDecl *findOriginalMethodInMap(const CXXMethodDecl *MD) const;
+
+  void setOriginalMethod(const CXXMethodDecl *Key, const CXXMethodDecl *Val) {
+    OriginalMethodMap[Key] = Val;
+  }
+
+  /// This method is reserved for the implementation and shouldn't be used
+  /// directly.
+  const OriginalMethodMapTy &getOriginalMethodMap() {
+    return OriginalMethodMap;
+  }
 
   static bool classof(const VTableContextBase *VT) {
     return !VT->isMicrosoft();
@@ -561,8 +593,6 @@ private:
 
   llvm::DenseMap<const CXXRecordDecl *, std::unique_ptr<VirtualBaseInfo>>
       VBaseInfo;
-
-  void enumerateVFPtrs(const CXXRecordDecl *ForClass, VPtrInfoVector &Result);
 
   void computeVTableRelatedInformation(const CXXRecordDecl *RD) override;
 

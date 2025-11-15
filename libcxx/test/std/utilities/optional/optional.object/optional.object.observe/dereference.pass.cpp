@@ -11,10 +11,6 @@
 
 // constexpr T& optional<T>::operator*() &;
 
-#ifdef _LIBCPP_DEBUG
-#define _LIBCPP_ASSERT(x, m) ((x) ? (void)0 : std::exit(0))
-#endif
-
 #include <optional>
 #include <type_traits>
 #include <cassert>
@@ -48,27 +44,25 @@ int main(int, char**)
     {
         optional<X> opt; ((void)opt);
         ASSERT_SAME_TYPE(decltype(*opt), X&);
-        // ASSERT_NOT_NOEXCEPT(*opt);
-        // FIXME: This assertion fails with GCC because it can see that
-        // (A) operator*() is constexpr, and
-        // (B) there is no path through the function that throws.
-        // It's arguable if this is the correct behavior for the noexcept
-        // operator.
-        // Regardless this function should still be noexcept(false) because
-        // it has a narrow contract.
+        ASSERT_NOEXCEPT(*opt);
     }
     {
         optional<X> opt(X{});
         assert((*opt).test() == 4);
     }
-    static_assert(test() == 7, "");
-#ifdef _LIBCPP_DEBUG
+#if TEST_STD_VER >= 26
     {
-        optional<X> opt;
-        assert((*opt).test() == 3);
-        assert(false);
+      X x{};
+      optional<X&> opt(x);
+      ASSERT_SAME_TYPE(decltype(*opt), X&);
+      ASSERT_NOEXCEPT(*opt);
     }
-#endif  // _LIBCPP_DEBUG
-
-  return 0;
+    {
+      X x{};
+      optional<X&> opt(x);
+      assert((*opt).test() == 4);
+    }
+#endif
+    static_assert(test() == 7, "");
+    return 0;
 }

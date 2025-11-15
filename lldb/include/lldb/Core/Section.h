@@ -17,12 +17,13 @@
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-forward.h"
 #include "lldb/lldb-types.h"
+#include "llvm/Support/JSON.h"
 
 #include <memory>
 #include <vector>
 
-#include <stddef.h>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 
 namespace lldb_private {
 class Address;
@@ -44,6 +45,8 @@ public:
 
   /// Create an empty list.
   SectionList() = default;
+
+  SectionList(const SectionList &lhs);
 
   SectionList &operator=(const SectionList &rhs);
 
@@ -89,8 +92,48 @@ public:
 
   void Clear() { m_sections.clear(); }
 
+  /// Get the debug information size from all sections that contain debug
+  /// information. Symbol tables are not considered part of the debug
+  /// information for this call, just known sections that contain debug
+  /// information.
+  uint64_t GetDebugInfoSize() const;
+
+  // Callback to decide which of two matching sections should be used in the
+  // merged output.
+  using MergeCallback =
+      std::function<lldb::SectionSP(lldb::SectionSP, lldb::SectionSP)>;
+
+  // Function that merges two different sections into a new output list. All
+  // unique sections will be checked for conflict and resolved using the
+  // supplied merging callback.
+  static SectionList Merge(SectionList &lhs, SectionList &rhs,
+                           MergeCallback filter);
+
 protected:
   collection m_sections;
+};
+
+struct JSONSection {
+  std::optional<lldb::user_id_t> user_id;
+  std::string name;
+  std::optional<lldb::SectionType> type;
+  std::optional<uint64_t> address;
+  std::optional<uint64_t> size;
+  std::optional<uint64_t> file_offset;
+  std::optional<uint64_t> file_size;
+  std::optional<uint64_t> log2align;
+  std::optional<uint64_t> flags;
+
+  // Section permissions;
+  std::optional<bool> read;
+  std::optional<bool> write;
+  std::optional<bool> execute;
+
+  std::optional<bool> fake;
+  std::optional<bool> encrypted;
+  std::optional<bool> thread_specific;
+
+  std::vector<JSONSection> subsections;
 };
 
 class Section : public std::enable_shared_from_this<Section>,
@@ -236,6 +279,16 @@ public:
 
   void SetIsRelocated(bool b) { m_relocated = b; }
 
+  /// Returns true if this section contains debug information. Symbol tables
+  /// are not considered debug information since some symbols might contain
+  /// debug information (STABS, COFF) but not all symbols do, so to keep this
+  /// fast and simple only sections that contains only debug information should
+  /// return true.
+  bool ContainsOnlyDebugInfo() const;
+
+  /// Returns true if this is a global offset table section.
+  bool IsGOTSection() const;
+
 protected:
   ObjectFile *m_obj_file;   // The object file that data for this section should
                             // be read from
@@ -273,5 +326,17 @@ private:
 };
 
 } // namespace lldb_private
+
+namespace llvm {
+namespace json {
+
+bool fromJSON(const llvm::json::Value &value,
+              lldb_private::JSONSection &section, llvm::json::Path path);
+
+bool fromJSON(const llvm::json::Value &value, lldb::SectionType &type,
+              llvm::json::Path path);
+
+} // namespace json
+} // namespace llvm
 
 #endif // LLDB_CORE_SECTION_H

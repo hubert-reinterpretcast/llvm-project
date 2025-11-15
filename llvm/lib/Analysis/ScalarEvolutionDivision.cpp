@@ -15,15 +15,17 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/ScalarEvolution.h"
-#include "llvm/IR/Constants.h"
+#include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/ErrorHandling.h"
 #include <cassert>
 #include <cstdint>
 
+#define DEBUG_TYPE "scev-division"
+
 namespace llvm {
 class Type;
-}
+} // namespace llvm
 
 using namespace llvm;
 
@@ -128,6 +130,10 @@ void SCEVDivision::visitConstant(const SCEVConstant *Numerator) {
   }
 }
 
+void SCEVDivision::visitVScale(const SCEVVScale *Numerator) {
+  return cannotDivide(Numerator);
+}
+
 void SCEVDivision::visitAddRecExpr(const SCEVAddRecExpr *Numerator) {
   const SCEV *StartQ, *StartR, *StepQ, *StepR;
   if (!Numerator->isAffine())
@@ -215,16 +221,14 @@ void SCEVDivision::visitMulExpr(const SCEVMulExpr *Numerator) {
     return cannotDivide(Numerator);
 
   // The Remainder is obtained by replacing Denominator by 0 in Numerator.
-  ValueToValueMap RewriteMap;
-  RewriteMap[cast<SCEVUnknown>(Denominator)->getValue()] =
-      cast<SCEVConstant>(Zero)->getValue();
-  Remainder = SCEVParameterRewriter::rewrite(Numerator, SE, RewriteMap, true);
+  ValueToSCEVMapTy RewriteMap;
+  RewriteMap[cast<SCEVUnknown>(Denominator)->getValue()] = Zero;
+  Remainder = SCEVParameterRewriter::rewrite(Numerator, SE, RewriteMap);
 
   if (Remainder->isZero()) {
     // The Quotient is obtained by replacing Denominator by 1 in Numerator.
-    RewriteMap[cast<SCEVUnknown>(Denominator)->getValue()] =
-        cast<SCEVConstant>(One)->getValue();
-    Quotient = SCEVParameterRewriter::rewrite(Numerator, SE, RewriteMap, true);
+    RewriteMap[cast<SCEVUnknown>(Denominator)->getValue()] = One;
+    Quotient = SCEVParameterRewriter::rewrite(Numerator, SE, RewriteMap);
     return;
   }
 
@@ -256,4 +260,32 @@ SCEVDivision::SCEVDivision(ScalarEvolution &S, const SCEV *Numerator,
 void SCEVDivision::cannotDivide(const SCEV *Numerator) {
   Quotient = Zero;
   Remainder = Numerator;
+}
+
+void SCEVDivisionPrinterPass::runImpl(Function &F, ScalarEvolution &SE) {
+  OS << "Printing analysis 'Scalar Evolution Division' for function '"
+     << F.getName() << "':\n";
+  for (Instruction &Inst : instructions(F)) {
+    BinaryOperator *Div = dyn_cast<BinaryOperator>(&Inst);
+    if (!Div || Div->getOpcode() != Instruction::SDiv)
+      continue;
+
+    const SCEV *Numerator = SE.getSCEV(Div->getOperand(0));
+    const SCEV *Denominator = SE.getSCEV(Div->getOperand(1));
+    const SCEV *Quotient, *Remainder;
+    SCEVDivision::divide(SE, Numerator, Denominator, &Quotient, &Remainder);
+
+    OS << "Instruction: " << *Div << "\n";
+    OS.indent(2) << "Numerator: " << *Numerator << "\n";
+    OS.indent(2) << "Denominator: " << *Denominator << "\n";
+    OS.indent(2) << "Quotient: " << *Quotient << "\n";
+    OS.indent(2) << "Remainder: " << *Remainder << "\n";
+  }
+}
+
+PreservedAnalyses SCEVDivisionPrinterPass::run(Function &F,
+                                               FunctionAnalysisManager &AM) {
+  ScalarEvolution &SE = AM.getResult<ScalarEvolutionAnalysis>(F);
+  runImpl(F, SE);
+  return PreservedAnalyses::all();
 }

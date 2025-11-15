@@ -1,4 +1,4 @@
-//===--- TypePromotionInMathFnCheck.cpp - clang-tidy-----------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -15,9 +15,7 @@
 
 using namespace clang::ast_matchers;
 
-namespace clang {
-namespace tidy {
-namespace performance {
+namespace clang::tidy::performance {
 
 namespace {
 AST_MATCHER_P(Type, isBuiltinType, BuiltinType::Kind, Kind) {
@@ -31,21 +29,18 @@ AST_MATCHER_P(Type, isBuiltinType, BuiltinType::Kind, Kind) {
 TypePromotionInMathFnCheck::TypePromotionInMathFnCheck(
     StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
-      IncludeStyle(Options.getLocalOrGlobal("IncludeStyle",
-                                            utils::IncludeSorter::getMapping(),
-                                            utils::IncludeSorter::IS_LLVM)) {}
+      IncludeInserter(Options.getLocalOrGlobal("IncludeStyle",
+                                               utils::IncludeSorter::IS_LLVM),
+                      areDiagsSelfContained()) {}
 
 void TypePromotionInMathFnCheck::registerPPCallbacks(
     const SourceManager &SM, Preprocessor *PP, Preprocessor *ModuleExpanderPP) {
-  IncludeInserter = std::make_unique<utils::IncludeInserter>(SM, getLangOpts(),
-                                                              IncludeStyle);
-  PP->addPPCallbacks(IncludeInserter->CreatePPCallbacks());
+  IncludeInserter.registerPreprocessor(PP);
 }
 
 void TypePromotionInMathFnCheck::storeOptions(
     ClangTidyOptions::OptionMap &Opts) {
-  Options.store(Opts, "IncludeStyle", IncludeStyle,
-                utils::IncludeSorter::getMapping());
+  Options.store(Opts, "IncludeStyle", IncludeInserter.getStyle());
 }
 
 void TypePromotionInMathFnCheck::registerMatchers(MatchFinder *Finder) {
@@ -55,10 +50,10 @@ void TypePromotionInMathFnCheck::registerMatchers(MatchFinder *Finder) {
   constexpr BuiltinType::Kind DoubleTy = BuiltinType::Double;
   constexpr BuiltinType::Kind LongDoubleTy = BuiltinType::LongDouble;
 
-  auto hasBuiltinTyParam = [](int Pos, BuiltinType::Kind Kind) {
+  auto HasBuiltinTyParam = [](int Pos, BuiltinType::Kind Kind) {
     return hasParameter(Pos, hasType(isBuiltinType(Kind)));
   };
-  auto hasBuiltinTyArg = [](int Pos, BuiltinType::Kind Kind) {
+  auto HasBuiltinTyArg = [](int Pos, BuiltinType::Kind Kind) {
     return hasArgument(Pos, hasType(isBuiltinType(Kind)));
   };
 
@@ -72,8 +67,8 @@ void TypePromotionInMathFnCheck::registerMatchers(MatchFinder *Finder) {
       "::tanh", "::tgamma", "::trunc", "::llround", "::lround");
   Finder->addMatcher(
       callExpr(callee(functionDecl(OneDoubleArgFns, parameterCountIs(1),
-                                   hasBuiltinTyParam(0, DoubleTy))),
-               hasBuiltinTyArg(0, FloatTy))
+                                   HasBuiltinTyParam(0, DoubleTy))),
+               HasBuiltinTyArg(0, FloatTy))
           .bind("call"),
       this);
 
@@ -83,20 +78,20 @@ void TypePromotionInMathFnCheck::registerMatchers(MatchFinder *Finder) {
                                     "::nextafter", "::pow", "::remainder");
   Finder->addMatcher(
       callExpr(callee(functionDecl(TwoDoubleArgFns, parameterCountIs(2),
-                                   hasBuiltinTyParam(0, DoubleTy),
-                                   hasBuiltinTyParam(1, DoubleTy))),
-               hasBuiltinTyArg(0, FloatTy), hasBuiltinTyArg(1, FloatTy))
+                                   HasBuiltinTyParam(0, DoubleTy),
+                                   HasBuiltinTyParam(1, DoubleTy))),
+               HasBuiltinTyArg(0, FloatTy), HasBuiltinTyArg(1, FloatTy))
           .bind("call"),
       this);
 
   // Match calls to fma(double, double, double) where all args are floats.
   Finder->addMatcher(
       callExpr(callee(functionDecl(hasName("::fma"), parameterCountIs(3),
-                                   hasBuiltinTyParam(0, DoubleTy),
-                                   hasBuiltinTyParam(1, DoubleTy),
-                                   hasBuiltinTyParam(2, DoubleTy))),
-               hasBuiltinTyArg(0, FloatTy), hasBuiltinTyArg(1, FloatTy),
-               hasBuiltinTyArg(2, FloatTy))
+                                   HasBuiltinTyParam(0, DoubleTy),
+                                   HasBuiltinTyParam(1, DoubleTy),
+                                   HasBuiltinTyParam(2, DoubleTy))),
+               HasBuiltinTyArg(0, FloatTy), HasBuiltinTyArg(1, FloatTy),
+               HasBuiltinTyArg(2, FloatTy))
           .bind("call"),
       this);
 
@@ -104,10 +99,10 @@ void TypePromotionInMathFnCheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(
       callExpr(callee(functionDecl(
                    hasName("::frexp"), parameterCountIs(2),
-                   hasBuiltinTyParam(0, DoubleTy),
+                   HasBuiltinTyParam(0, DoubleTy),
                    hasParameter(1, parmVarDecl(hasType(pointerType(
                                        pointee(isBuiltinType(IntTy)))))))),
-               hasBuiltinTyArg(0, FloatTy))
+               HasBuiltinTyArg(0, FloatTy))
           .bind("call"),
       this);
 
@@ -115,9 +110,9 @@ void TypePromotionInMathFnCheck::registerMatchers(MatchFinder *Finder) {
   // float.
   Finder->addMatcher(
       callExpr(callee(functionDecl(hasName("::nexttoward"), parameterCountIs(2),
-                                   hasBuiltinTyParam(0, DoubleTy),
-                                   hasBuiltinTyParam(1, LongDoubleTy))),
-               hasBuiltinTyArg(0, FloatTy))
+                                   HasBuiltinTyParam(0, DoubleTy),
+                                   HasBuiltinTyParam(1, LongDoubleTy))),
+               HasBuiltinTyArg(0, FloatTy))
           .bind("call"),
       this);
 
@@ -127,28 +122,28 @@ void TypePromotionInMathFnCheck::registerMatchers(MatchFinder *Finder) {
       callExpr(
           callee(functionDecl(
               hasName("::remquo"), parameterCountIs(3),
-              hasBuiltinTyParam(0, DoubleTy), hasBuiltinTyParam(1, DoubleTy),
+              HasBuiltinTyParam(0, DoubleTy), HasBuiltinTyParam(1, DoubleTy),
               hasParameter(2, parmVarDecl(hasType(pointerType(
                                   pointee(isBuiltinType(IntTy)))))))),
-          hasBuiltinTyArg(0, FloatTy), hasBuiltinTyArg(1, FloatTy))
+          HasBuiltinTyArg(0, FloatTy), HasBuiltinTyArg(1, FloatTy))
           .bind("call"),
       this);
 
   // Match calls to scalbln(double, long) where the first arg is a float.
   Finder->addMatcher(
       callExpr(callee(functionDecl(hasName("::scalbln"), parameterCountIs(2),
-                                   hasBuiltinTyParam(0, DoubleTy),
-                                   hasBuiltinTyParam(1, LongTy))),
-               hasBuiltinTyArg(0, FloatTy))
+                                   HasBuiltinTyParam(0, DoubleTy),
+                                   HasBuiltinTyParam(1, LongTy))),
+               HasBuiltinTyArg(0, FloatTy))
           .bind("call"),
       this);
 
   // Match calls to scalbn(double, int) where the first arg is a float.
   Finder->addMatcher(
       callExpr(callee(functionDecl(hasName("::scalbn"), parameterCountIs(2),
-                                   hasBuiltinTyParam(0, DoubleTy),
-                                   hasBuiltinTyParam(1, IntTy))),
-               hasBuiltinTyArg(0, FloatTy))
+                                   HasBuiltinTyParam(0, DoubleTy),
+                                   HasBuiltinTyParam(1, IntTy))),
+               HasBuiltinTyArg(0, FloatTy))
           .bind("call"),
       this);
 
@@ -160,18 +155,18 @@ void TypePromotionInMathFnCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *Call = Result.Nodes.getNodeAs<CallExpr>("call");
   assert(Call != nullptr);
 
-  StringRef OldFnName = Call->getDirectCallee()->getName();
+  const StringRef OldFnName = Call->getDirectCallee()->getName();
 
   // In C++ mode, we prefer std::foo to ::foof.  But some of these suggestions
   // are only valid in C++11 and newer.
-  static llvm::StringSet<> Cpp11OnlyFns = {
+  static const llvm::StringSet<> Cpp11OnlyFns = {
       "acosh",     "asinh",      "atanh",     "cbrt",   "copysign", "erf",
       "erfc",      "exp2",       "expm1",     "fdim",   "fma",      "fmax",
       "fmin",      "hypot",      "ilogb",     "lgamma", "llrint",   "llround",
       "log1p",     "log2",       "logb",      "lrint",  "lround",   "nearbyint",
       "nextafter", "nexttoward", "remainder", "remquo", "rint",     "round",
       "scalbln",   "scalbn",     "tgamma",    "trunc"};
-  bool StdFnRequiresCpp11 = Cpp11OnlyFns.count(OldFnName);
+  const bool StdFnRequiresCpp11 = Cpp11OnlyFns.contains(OldFnName);
 
   std::string NewFnName;
   bool FnInCmath = false;
@@ -193,11 +188,9 @@ void TypePromotionInMathFnCheck::check(const MatchFinder::MatchResult &Result) {
   // <math.h>, because the functions we're suggesting moving away from are all
   // declared in <math.h>.
   if (FnInCmath)
-    Diag << IncludeInserter->CreateIncludeInsertion(
+    Diag << IncludeInserter.createIncludeInsertion(
         Result.Context->getSourceManager().getFileID(Call->getBeginLoc()),
-        "cmath", /*IsAngled=*/true);
+        "<cmath>");
 }
 
-} // namespace performance
-} // namespace tidy
-} // namespace clang
+} // namespace clang::tidy::performance

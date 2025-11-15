@@ -16,27 +16,23 @@
 // to work with CUDA and OpenMP target offloading [in C and C++ mode].)
 
 #pragma push_macro("__DEVICE__")
-#ifdef _OPENMP
+#if defined(__OPENMP_NVPTX__) || defined(__OPENMP_AMDGCN__)
 #pragma omp declare target
 #define __DEVICE__ __attribute__((noinline, nothrow, cold, weak))
 #else
 #define __DEVICE__ __device__ inline
 #endif
 
-// Make the algorithms available for C and C++ by selecting the right functions.
-#if defined(__cplusplus)
-// TODO: In OpenMP mode we cannot overload isinf/isnan/isfinite the way we
-// overload all other math functions because old math system headers and not
-// always conformant and return an integer instead of a boolean. Until that has
-// been addressed we need to work around it. For now, we substituate with the
-// calls we would have used to implement those three functions. Note that we
-// could use the C alternatives as well.
-#define _ISNANd ::__isnan
-#define _ISNANf ::__isnanf
-#define _ISINFd ::__isinf
-#define _ISINFf ::__isinff
-#define _ISFINITEd ::__isfinited
-#define _ISFINITEf ::__finitef
+// To make the algorithms available for C and C++ in CUDA and OpenMP we select
+// different but equivalent function versions. TODO: For OpenMP we currently
+// select the native builtins as the overload support for templates is lacking.
+#if !defined(__OPENMP_NVPTX__) && !defined(__OPENMP_AMDGCN__)
+#define _ISNANd std::isnan
+#define _ISNANf std::isnan
+#define _ISINFd std::isinf
+#define _ISINFf std::isinf
+#define _ISFINITEd std::isfinite
+#define _ISFINITEf std::isfinite
 #define _COPYSIGNd std::copysign
 #define _COPYSIGNf std::copysign
 #define _SCALBNd std::scalbn
@@ -45,21 +41,45 @@
 #define _ABSf std::abs
 #define _LOGBd std::logb
 #define _LOGBf std::logb
+// Rather than pulling in std::max from algorithm everytime, use available ::max.
+#define _fmaxd max
+#define _fmaxf max
 #else
-#define _ISNANd isnan
-#define _ISNANf isnanf
-#define _ISINFd isinf
-#define _ISINFf isinff
-#define _ISFINITEd isfinite
-#define _ISFINITEf isfinitef
-#define _COPYSIGNd copysign
-#define _COPYSIGNf copysignf
-#define _SCALBNd scalbn
-#define _SCALBNf scalbnf
-#define _ABSd abs
-#define _ABSf absf
-#define _LOGBd logb
-#define _LOGBf logbf
+#ifdef __AMDGCN__
+#define _ISNANd __ocml_isnan_f64
+#define _ISNANf __ocml_isnan_f32
+#define _ISINFd __ocml_isinf_f64
+#define _ISINFf __ocml_isinf_f32
+#define _ISFINITEd __ocml_isfinite_f64
+#define _ISFINITEf __ocml_isfinite_f32
+#define _COPYSIGNd __ocml_copysign_f64
+#define _COPYSIGNf __ocml_copysign_f32
+#define _SCALBNd __ocml_scalbn_f64
+#define _SCALBNf __ocml_scalbn_f32
+#define _ABSd __ocml_fabs_f64
+#define _ABSf __ocml_fabs_f32
+#define _LOGBd __ocml_logb_f64
+#define _LOGBf __ocml_logb_f32
+#define _fmaxd __ocml_fmax_f64
+#define _fmaxf __ocml_fmax_f32
+#else
+#define _ISNANd __nv_isnand
+#define _ISNANf __nv_isnanf
+#define _ISINFd __nv_isinfd
+#define _ISINFf __nv_isinff
+#define _ISFINITEd __nv_isfinited
+#define _ISFINITEf __nv_finitef
+#define _COPYSIGNd __nv_copysign
+#define _COPYSIGNf __nv_copysignf
+#define _SCALBNd __nv_scalbn
+#define _SCALBNf __nv_scalbnf
+#define _ABSd __nv_fabs
+#define _ABSf __nv_fabsf
+#define _LOGBd __nv_logb
+#define _LOGBf __nv_logbf
+#define _fmaxd __nv_fmax
+#define _fmaxf __nv_fmaxf
+#endif
 #endif
 
 #if defined(__cplusplus)
@@ -171,7 +191,7 @@ __DEVICE__ double _Complex __divdc3(double __a, double __b, double __c,
   // Can't use std::max, because that's defined in <algorithm>, and we don't
   // want to pull that in for every compile.  The CUDA headers define
   // ::max(float, float) and ::max(double, double), which is sufficient for us.
-  double __logbw = _LOGBd(max(_ABSd(__c), _ABSd(__d)));
+  double __logbw = _LOGBd(_fmaxd(_ABSd(__c), _ABSd(__d)));
   if (_ISFINITEd(__logbw)) {
     __ilogbw = (int)__logbw;
     __c = _SCALBNd(__c, -__ilogbw);
@@ -204,7 +224,7 @@ __DEVICE__ double _Complex __divdc3(double __a, double __b, double __c,
 
 __DEVICE__ float _Complex __divsc3(float __a, float __b, float __c, float __d) {
   int __ilogbw = 0;
-  float __logbw = _LOGBf(max(_ABSf(__c), _ABSf(__d)));
+  float __logbw = _LOGBf(_fmaxf(_ABSf(__c), _ABSf(__d)));
   if (_ISFINITEf(__logbw)) {
     __ilogbw = (int)__logbw;
     __c = _SCALBNf(__c, -__ilogbw);
@@ -253,8 +273,10 @@ __DEVICE__ float _Complex __divsc3(float __a, float __b, float __c, float __d) {
 #undef _ABSf
 #undef _LOGBd
 #undef _LOGBf
+#undef _fmaxd
+#undef _fmaxf
 
-#ifdef _OPENMP
+#if defined(__OPENMP_NVPTX__) || defined(__OPENMP_AMDGCN__)
 #pragma omp end declare target
 #endif
 

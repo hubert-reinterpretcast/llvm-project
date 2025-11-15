@@ -6,6 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// ADDITIONAL_COMPILE_FLAGS: -D_LIBCPP_DISABLE_DEPRECATION_WARNINGS
+
 // <functional>
 
 // template <class T>
@@ -15,12 +17,14 @@
 //     size_t operator()(T val) const;
 // };
 
+// XFAIL: FROZEN-CXX03-HEADERS-FIXME
+
 // Not very portable
 
-#include <functional>
 #include <cassert>
+#include <cstddef>
+#include <functional>
 #include <type_traits>
-#include <limits>
 
 #include "test_macros.h"
 
@@ -29,8 +33,10 @@ void
 test()
 {
     typedef std::hash<T> H;
-    static_assert((std::is_same<typename H::argument_type, T>::value), "" );
-    static_assert((std::is_same<typename H::result_type, std::size_t>::value), "" );
+#if TEST_STD_VER <= 17
+    static_assert((std::is_same<typename H::argument_type, T>::value), "");
+    static_assert((std::is_same<typename H::result_type, std::size_t>::value), "");
+#endif
     ASSERT_NOEXCEPT(H()(T()));
     H h;
 
@@ -40,16 +46,14 @@ test()
     assert(h(&i) != h(&j));
 }
 
-// can't hash nullptr_t until C++17
-void test_nullptr()
-{
-#if TEST_STD_VER > 14
-    typedef std::nullptr_t T;
-    typedef std::hash<T> H;
-    static_assert((std::is_same<typename H::argument_type, T>::value), "" );
-    static_assert((std::is_same<typename H::result_type, std::size_t>::value), "" );
-    ASSERT_NOEXCEPT(H()(T()));
+void test_nullptr() {
+  typedef std::nullptr_t T;
+  typedef std::hash<T> H;
+#if TEST_STD_VER <= 17
+  static_assert((std::is_same<typename H::argument_type, T>::value), "");
+  static_assert((std::is_same<typename H::result_type, std::size_t>::value), "");
 #endif
+  ASSERT_NOEXCEPT(H()(T()));
 }
 
 int main(int, char**)

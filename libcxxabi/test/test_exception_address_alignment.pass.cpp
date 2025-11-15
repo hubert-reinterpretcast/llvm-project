@@ -9,14 +9,6 @@
 // UNSUPPORTED: no-exceptions
 // UNSUPPORTED: c++03
 
-// The <unwind.h> header provided in the SDK of older Xcodes used to provide
-// an incorrectly aligned _Unwind_Exception type. That causes these tests to
-// fail with those SDKs. Note that we use the AppleClang version as a cheap
-// proxy for the SDK version.
-// XFAIL: apple-clang-11 && libcxxabi-has-system-unwinder
-// XFAIL: apple-clang-10 && libcxxabi-has-system-unwinder
-// XFAIL: apple-clang-9 && libcxxabi-has-system-unwinder
-
 // Test that the address of the exception object is properly aligned as required
 // by the relevant ABI
 
@@ -42,7 +34,7 @@ static_assert(alignof(_Unwind_Exception) == EXPECTED_ALIGNMENT,
 struct MinAligned {  };
 static_assert(alignof(MinAligned) == 1 && sizeof(MinAligned) == 1, "");
 
-int main() {
+int main(int, char**) {
   for (int i=0; i < 10; ++i) {
     try {
       throw MinAligned{};
@@ -50,4 +42,6 @@ int main() {
       assert(reinterpret_cast<uintptr_t>(&ref) % EXPECTED_ALIGNMENT == 0);
     }
   }
+
+  return 0;
 }

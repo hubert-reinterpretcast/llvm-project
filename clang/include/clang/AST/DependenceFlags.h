@@ -16,8 +16,18 @@ namespace clang {
 struct ExprDependenceScope {
   enum ExprDependence : uint8_t {
     UnexpandedPack = 1,
+    // This expr depends in any way on
+    //   - a template parameter, it implies that the resolution of this expr may
+    //     cause instantiation to fail
+    //   - or an error (often in a non-template context)
+    //
+    // Note that C++ standard doesn't define the instantiation-dependent term,
+    // we follow the formal definition coming from the Itanium C++ ABI, and
+    // extend it to errors.
     Instantiation = 2,
+    // The type of this expr depends on a template parameter, or an error.
     Type = 4,
+    // The value of this expr depends on a template parameter, or an error.
     Value = 8,
 
     // clang extension: this expr contains or references an error, and is
@@ -31,6 +41,7 @@ struct ExprDependenceScope {
     TypeInstantiation = Type | Instantiation,
     ValueInstantiation = Value | Instantiation,
     TypeValueInstantiation = Type | Value | Instantiation,
+    ErrorDependent = Error | ValueInstantiation,
 
     LLVM_MARK_AS_BITMASK_ENUM(/*LargestValue=*/Error)
   };
@@ -42,10 +53,14 @@ struct TypeDependenceScope {
     /// Whether this type contains an unexpanded parameter pack
     /// (for C++11 variadic templates)
     UnexpandedPack = 1,
-    /// Whether this type somehow involves a template parameter, even
-    /// if the resolution of the type does not depend on a template parameter.
+    /// Whether this type somehow involves
+    ///   - a template parameter, even if the resolution of the type does not
+    ///     depend on a template parameter.
+    ///   - or an error.
     Instantiation = 2,
-    /// Whether this type is a dependent type (C++ [temp.dep.type]).
+    /// Whether this type
+    ///   - is a dependent type (C++ [temp.dep.type])
+    ///   - or it somehow involves an error, e.g. decltype(recovery-expr)
     Dependent = 4,
     /// Whether this type is a variably-modified type (C99 6.7.5).
     VariablyModified = 8,
@@ -95,22 +110,34 @@ public:
 
     // Contains a template parameter pack that wasn't expanded.
     UnexpandedPack = 1,
-    // Uses a template parameter, even if it doesn't affect the result.
-    // Validity depends on the template parameter.
+    // Depends on a template parameter or an error in some way.
+    // Validity depends on how the template is instantiated or the error is
+    // resolved.
     Instantiation = 2,
-    // Expression type depends on template context.
+    // Expression type depends on template context, or an error.
     // Value and Instantiation should also be set.
     Type = 4,
-    // Expression value depends on template context.
+    // Expression value depends on template context, or an error.
     // Instantiation should also be set.
     Value = 8,
-    // Depends on template context.
+    // Depends on template context, or an error.
     // The type/value distinction is only meaningful for expressions.
     Dependent = Type | Value,
     // Includes an error, and depends on how it is resolved.
     Error = 16,
     // Type depends on a runtime value (variable-length array).
     VariablyModified = 32,
+
+    // Dependence that is propagated syntactically, regardless of semantics.
+    Syntactic = UnexpandedPack | Instantiation | Error,
+    // Dependence that is propagated semantically, even in cases where the
+    // type doesn't syntactically appear. This currently excludes only
+    // UnexpandedPack. Even though Instantiation dependence is also notionally
+    // syntactic, we also want to propagate it semantically because anything
+    // that semantically depends on an instantiation-dependent entity should
+    // always be instantiated when that instantiation-dependent entity is.
+    Semantic =
+        Instantiation | Type | Value | Dependent | Error | VariablyModified,
 
     LLVM_MARK_AS_BITMASK_ENUM(/*LargestValue=*/VariablyModified)
   };
@@ -148,6 +175,21 @@ public:
              translate(D, TNDependence::Instantiation, Instantiation) |
              translate(D, TNDependence::Dependent, Dependent) |
              translate(D, TNDependence::Error, Error)) {}
+
+  /// Extract only the syntactic portions of this type's dependence.
+  Dependence syntactic() {
+    Dependence Result = *this;
+    Result.V &= Syntactic;
+    return Result;
+  }
+
+  /// Extract the semantic portions of this type's dependence that apply even
+  /// to uses where the type does not appear syntactically.
+  Dependence semantic() {
+    Dependence Result = *this;
+    Result.V &= Semantic;
+    return Result;
+  }
 
   TypeDependence type() const {
     return translate(V, UnexpandedPack, TypeDependence::UnexpandedPack) |
@@ -205,7 +247,10 @@ private:
 inline ExprDependence toExprDependence(TemplateArgumentDependence TA) {
   return Dependence(TA).expr();
 }
-inline ExprDependence toExprDependence(TypeDependence D) {
+inline ExprDependence toExprDependenceForImpliedType(TypeDependence D) {
+  return Dependence(D).semantic().expr();
+}
+inline ExprDependence toExprDependenceAsWritten(TypeDependence D) {
   return Dependence(D).expr();
 }
 // Note: it's often necessary to strip `Dependent` from qualifiers.
@@ -240,8 +285,15 @@ inline TypeDependence toTypeDependence(TemplateArgumentDependence D) {
   return Dependence(D).type();
 }
 
+inline TypeDependence toSyntacticDependence(TypeDependence D) {
+  return Dependence(D).syntactic().type();
+}
+inline TypeDependence toSemanticDependence(TypeDependence D) {
+  return Dependence(D).semantic().type();
+}
+
 inline NestedNameSpecifierDependence
-toNestedNameSpecifierDependendence(TypeDependence D) {
+toNestedNameSpecifierDependence(TypeDependence D) {
   return Dependence(D).nestedNameSpecifier();
 }
 
@@ -260,6 +312,11 @@ toTemplateArgumentDependence(ExprDependence D) {
 
 inline TemplateNameDependence
 toTemplateNameDependence(NestedNameSpecifierDependence D) {
+  return Dependence(D).templateName();
+}
+
+inline TemplateNameDependence
+toTemplateNameDependence(TemplateArgumentDependence D) {
   return Dependence(D).templateName();
 }
 

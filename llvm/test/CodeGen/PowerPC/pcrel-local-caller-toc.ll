@@ -57,11 +57,11 @@ define dso_local void @caller(i32 signext %a) local_unnamed_addr #2 {
 ; CHECK-NEXT:    mtlr r0
 ; CHECK-NEXT:    blr
 entry:
-  %0 = load i32, i32* @global, align 4
+  %0 = load i32, ptr @global, align 4
   %add = add nsw i32 %0, %a
   %call = tail call signext i32 @callee(i32 signext %add)
   %mul = mul nsw i32 %call, %call
-  store i32 %mul, i32* @global, align 4
+  store i32 %mul, ptr @global, align 4
   ret void
 }
 
@@ -83,7 +83,7 @@ define dso_local signext i32 @tail_caller(i32 signext %a) local_unnamed_addr #2 
 ; CHECK-NEXT:    mtlr r0
 ; CHECK-NEXT:    blr
 entry:
-  %0 = load i32, i32* @global, align 4
+  %0 = load i32, ptr @global, align 4
   %add = add nsw i32 %0, %a
   %call = tail call signext i32 @callee(i32 signext %add)
   ret i32 %call
@@ -92,7 +92,7 @@ entry:
 
 ; Left the target features in this test because it is important that caller has
 ; -pcrelative-memops while callee has +pcrelative-memops
-attributes #0 = { nounwind "target-features"="+altivec,+bpermd,+crypto,+direct-move,+extdiv,+pcrelative-memops,+power8-vector,+power9-vector,+vsx,-htm,-qpx,-spe" }
-attributes #1 = { "target-features"="+altivec,+bpermd,+crypto,+direct-move,+extdiv,+pcrelative-memops,+power8-vector,+power9-vector,+vsx,-htm,-qpx,-spe" }
-attributes #2 = { nounwind "target-features"="+altivec,+bpermd,+crypto,+direct-move,+extdiv,+power8-vector,+power9-vector,+vsx,-htm,-pcrelative-memops,-qpx,-spe" }
+attributes #0 = { nounwind "target-features"="+altivec,+bpermd,+crypto,+direct-move,+extdiv,+pcrelative-memops,+power8-vector,+power9-vector,+vsx,-htm,-spe" }
+attributes #1 = { "target-features"="+altivec,+bpermd,+crypto,+direct-move,+extdiv,+pcrelative-memops,+power8-vector,+power9-vector,+vsx,-htm,-spe" }
+attributes #2 = { nounwind "target-features"="+altivec,+bpermd,+crypto,+direct-move,+extdiv,+power8-vector,+power9-vector,+vsx,-htm,-pcrelative-memops,-spe" }
 attributes #3 = { nounwind }

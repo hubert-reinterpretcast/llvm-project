@@ -6,10 +6,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "PassDetail.h"
-#include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/Dialect/Shape/Transforms/Passes.h"
+
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Shape/IR/Shape.h"
 #include "mlir/Transforms/DialectConversion.h"
+#include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+
+namespace mlir {
+#define GEN_PASS_DEF_REMOVESHAPECONSTRAINTSPASS
+#include "mlir/Dialect/Shape/Transforms/Passes.h.inc"
+} // namespace mlir
 
 using namespace mlir;
 
@@ -40,25 +47,21 @@ public:
 
 /// Removal pass.
 class RemoveShapeConstraintsPass
-    : public RemoveShapeConstraintsBase<RemoveShapeConstraintsPass> {
+    : public impl::RemoveShapeConstraintsPassBase<RemoveShapeConstraintsPass> {
 
-  void runOnFunction() override {
+  void runOnOperation() override {
     MLIRContext &ctx = getContext();
 
-    OwningRewritePatternList patterns;
-    populateRemoveShapeConstraintsPatterns(patterns, &ctx);
+    RewritePatternSet patterns(&ctx);
+    populateRemoveShapeConstraintsPatterns(patterns);
 
-    applyPatternsAndFoldGreedily(getFunction(), patterns);
+    (void)applyPatternsGreedily(getOperation(), std::move(patterns));
   }
 };
 
 } // namespace
 
-void mlir::populateRemoveShapeConstraintsPatterns(
-    OwningRewritePatternList &patterns, MLIRContext *ctx) {
-  patterns.insert<RemoveCstrBroadcastableOp, RemoveCstrEqOp>(ctx);
-}
-
-std::unique_ptr<FunctionPass> mlir::createRemoveShapeConstraintsPass() {
-  return std::make_unique<RemoveShapeConstraintsPass>();
+void mlir::populateRemoveShapeConstraintsPatterns(RewritePatternSet &patterns) {
+  patterns.add<RemoveCstrBroadcastableOp, RemoveCstrEqOp>(
+      patterns.getContext());
 }

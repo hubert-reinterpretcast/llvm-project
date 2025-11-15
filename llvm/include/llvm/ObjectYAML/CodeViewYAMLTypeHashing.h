@@ -21,7 +21,6 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/YAMLTraits.h"
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 namespace llvm {
@@ -58,4 +57,4 @@ LLVM_YAML_DECLARE_MAPPING_TRAITS(CodeViewYAML::DebugHSection)
 LLVM_YAML_DECLARE_SCALAR_TRAITS(CodeViewYAML::GlobalHash, QuotingType::None)
 LLVM_YAML_IS_SEQUENCE_VECTOR(CodeViewYAML::GlobalHash)
 
-#endif // LLVM_OBJECTYAML_CODEVIEWYAMLTYPES_H
+#endif // LLVM_OBJECTYAML_CODEVIEWYAMLTYPEHASHING_H

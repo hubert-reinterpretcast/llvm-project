@@ -42,8 +42,7 @@ class InstrumentationRuntime
 
 protected:
   InstrumentationRuntime(const lldb::ProcessSP &process_sp)
-      : m_process_wp(), m_runtime_module(), m_breakpoint_id(0),
-        m_is_active(false) {
+      : m_breakpoint_id(0), m_is_active(false) {
     if (process_sp)
       m_process_wp = process_sp;
   }
@@ -53,7 +52,7 @@ protected:
   lldb::ModuleSP GetRuntimeModuleSP() { return m_runtime_module; }
 
   void SetRuntimeModuleSP(lldb::ModuleSP module_sp) {
-    m_runtime_module = module_sp;
+    m_runtime_module = std::move(module_sp);
   }
 
   lldb::user_id_t GetBreakpointID() const { return m_breakpoint_id; }
@@ -73,6 +72,13 @@ protected:
   /// necessary initialization. The runtime library
   /// is guaranteed to be loaded.
   virtual void Activate() = 0;
+
+  /// \return true if `CheckIfRuntimeIsValid` should be called on all modules.
+  /// In this case the return value of `GetPatternForRuntimeLibrary` will be
+  /// ignored. Return false if `CheckIfRuntimeIsValid` should only be called
+  /// for modules whose name matches `GetPatternForRuntimeLibrary`.
+  ///
+  virtual bool MatchAllModules() { return false; }
 
 public:
   static void ModulesDidLoad(lldb_private::ModuleList &module_list,

@@ -88,16 +88,19 @@ struct Derived6 : virtual public Bases... {
 // using --filters=CXXRecordDecl
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "name": "__NSConstantString_tag"
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "name": "__va_list_tag"
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 102,
@@ -123,6 +126,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 112,
@@ -148,6 +152,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 123,
@@ -366,7 +371,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:      "type": {
 // CHECK-NEXT:       "qualType": "int"
 // CHECK-NEXT:      },
-// CHECK-NEXT:      "valueCategory": "rvalue",
+// CHECK-NEXT:      "valueCategory": "prvalue",
 // CHECK-NEXT:      "value": "12",
 // CHECK-NEXT:      "inner": [
 // CHECK-NEXT:       {
@@ -387,7 +392,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:        "type": {
 // CHECK-NEXT:         "qualType": "int"
 // CHECK-NEXT:        },
-// CHECK-NEXT:        "valueCategory": "rvalue",
+// CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "value": "12"
 // CHECK-NEXT:       }
 // CHECK-NEXT:      ]
@@ -438,7 +443,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:      "type": {
 // CHECK-NEXT:       "qualType": "int"
 // CHECK-NEXT:      },
-// CHECK-NEXT:      "valueCategory": "rvalue",
+// CHECK-NEXT:      "valueCategory": "prvalue",
 // CHECK-NEXT:      "value": "0",
 // CHECK-NEXT:      "inner": [
 // CHECK-NEXT:       {
@@ -459,7 +464,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:        "type": {
 // CHECK-NEXT:         "qualType": "int"
 // CHECK-NEXT:        },
-// CHECK-NEXT:        "valueCategory": "rvalue",
+// CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "value": "0"
 // CHECK-NEXT:       }
 // CHECK-NEXT:      ]
@@ -511,7 +516,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:      "type": {
 // CHECK-NEXT:       "qualType": "int"
 // CHECK-NEXT:      },
-// CHECK-NEXT:      "valueCategory": "rvalue",
+// CHECK-NEXT:      "valueCategory": "prvalue",
 // CHECK-NEXT:      "value": "10",
 // CHECK-NEXT:      "inner": [
 // CHECK-NEXT:       {
@@ -532,7 +537,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:        "type": {
 // CHECK-NEXT:         "qualType": "int"
 // CHECK-NEXT:        },
-// CHECK-NEXT:        "valueCategory": "rvalue",
+// CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "value": "10"
 // CHECK-NEXT:       }
 // CHECK-NEXT:      ]
@@ -569,6 +574,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 206,
@@ -789,8 +795,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:    },
 // CHECK-NEXT:    "name": "b",
 // CHECK-NEXT:    "type": {
-// CHECK-NEXT:     "desugaredQualType": "C::(anonymous struct at {{.*}}:16:3)",
-// CHECK-NEXT:     "qualType": "struct (anonymous struct at {{.*}}:16:3)"
+// CHECK-NEXT:     "qualType": "struct (unnamed struct at {{.*}}:16:3)"
 // CHECK-NEXT:    }
 // CHECK-NEXT:   },
 // CHECK-NEXT:   {
@@ -1194,6 +1199,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 321,
@@ -1338,7 +1344,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:    },
 // CHECK-NEXT:    "name": "b",
 // CHECK-NEXT:    "type": {
-// CHECK-NEXT:     "qualType": "int [10]"
+// CHECK-NEXT:     "qualType": "int[10]"
 // CHECK-NEXT:    }
 // CHECK-NEXT:   },
 // CHECK-NEXT:   {
@@ -1364,13 +1370,14 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:    },
 // CHECK-NEXT:    "name": "c",
 // CHECK-NEXT:    "type": {
-// CHECK-NEXT:     "qualType": "int []"
+// CHECK-NEXT:     "qualType": "int[]"
 // CHECK-NEXT:    }
 // CHECK-NEXT:   }
 // CHECK-NEXT:  ]
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 368,
@@ -1395,6 +1402,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 378,
@@ -1419,6 +1427,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 388,
@@ -1638,7 +1647,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:      "type": {
 // CHECK-NEXT:       "qualType": "int"
 // CHECK-NEXT:      },
-// CHECK-NEXT:      "valueCategory": "rvalue",
+// CHECK-NEXT:      "valueCategory": "prvalue",
 // CHECK-NEXT:      "value": "12",
 // CHECK-NEXT:      "inner": [
 // CHECK-NEXT:       {
@@ -1659,7 +1668,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:        "type": {
 // CHECK-NEXT:         "qualType": "int"
 // CHECK-NEXT:        },
-// CHECK-NEXT:        "valueCategory": "rvalue",
+// CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "value": "12"
 // CHECK-NEXT:       }
 // CHECK-NEXT:      ]
@@ -1710,7 +1719,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:      "type": {
 // CHECK-NEXT:       "qualType": "int"
 // CHECK-NEXT:      },
-// CHECK-NEXT:      "valueCategory": "rvalue",
+// CHECK-NEXT:      "valueCategory": "prvalue",
 // CHECK-NEXT:      "value": "0",
 // CHECK-NEXT:      "inner": [
 // CHECK-NEXT:       {
@@ -1731,7 +1740,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:        "type": {
 // CHECK-NEXT:         "qualType": "int"
 // CHECK-NEXT:        },
-// CHECK-NEXT:        "valueCategory": "rvalue",
+// CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "value": "0"
 // CHECK-NEXT:       }
 // CHECK-NEXT:      ]
@@ -1783,7 +1792,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:      "type": {
 // CHECK-NEXT:       "qualType": "int"
 // CHECK-NEXT:      },
-// CHECK-NEXT:      "valueCategory": "rvalue",
+// CHECK-NEXT:      "valueCategory": "prvalue",
 // CHECK-NEXT:      "value": "10",
 // CHECK-NEXT:      "inner": [
 // CHECK-NEXT:       {
@@ -1804,7 +1813,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:        "type": {
 // CHECK-NEXT:         "qualType": "int"
 // CHECK-NEXT:        },
-// CHECK-NEXT:        "valueCategory": "rvalue",
+// CHECK-NEXT:        "valueCategory": "prvalue",
 // CHECK-NEXT:        "value": "10"
 // CHECK-NEXT:       }
 // CHECK-NEXT:      ]
@@ -1841,6 +1850,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 470,
@@ -2061,8 +2071,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT:    },
 // CHECK-NEXT:    "name": "b",
 // CHECK-NEXT:    "type": {
-// CHECK-NEXT:     "desugaredQualType": "G::(anonymous struct at {{.*}}:50:3)",
-// CHECK-NEXT:     "qualType": "struct (anonymous struct at {{.*}}:50:3)"
+// CHECK-NEXT:     "qualType": "struct (unnamed struct at {{.*}}:50:3)"
 // CHECK-NEXT:    }
 // CHECK-NEXT:   },
 // CHECK-NEXT:   {
@@ -2466,6 +2475,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 585,
@@ -2707,6 +2717,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 602,
@@ -2948,6 +2959,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 619,
@@ -3189,6 +3201,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 637,
@@ -3301,6 +3314,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 667,
@@ -3412,6 +3426,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 705,
@@ -3651,6 +3666,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 743,
@@ -3904,6 +3920,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 805,
@@ -4143,6 +4160,7 @@ struct Derived6 : virtual public Bases... {
 // CHECK-NEXT: }
 
 
+// CHECK-NOT: {{^}}Dumping
 // CHECK:  "kind": "CXXRecordDecl",
 // CHECK-NEXT:  "loc": {
 // CHECK-NEXT:   "offset": 882,

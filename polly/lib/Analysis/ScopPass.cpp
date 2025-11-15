@@ -14,46 +14,15 @@
 #include "polly/ScopInfo.h"
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/GlobalsModRef.h"
+#include "llvm/Analysis/LazyBlockFrequencyInfo.h"
+#include "llvm/Analysis/LazyBranchProbabilityInfo.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/Analysis/ScalarEvolutionAliasAnalysis.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include <optional>
 
 using namespace llvm;
 using namespace polly;
-
-bool ScopPass::runOnRegion(Region *R, RGPassManager &RGM) {
-  S = nullptr;
-
-  if (skipRegion(*R))
-    return false;
-
-  if ((S = getAnalysis<ScopInfoRegionPass>().getScop()))
-    return runOnScop(*S);
-
-  return false;
-}
-
-void ScopPass::print(raw_ostream &OS, const Module *M) const {
-  if (S)
-    printScop(OS, *S);
-}
-
-void ScopPass::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<ScopInfoRegionPass>();
-
-  AU.addPreserved<AAResultsWrapperPass>();
-  AU.addPreserved<BasicAAWrapperPass>();
-  AU.addPreserved<LoopInfoWrapperPass>();
-  AU.addPreserved<DominatorTreeWrapperPass>();
-  AU.addPreserved<GlobalsAAWrapperPass>();
-  AU.addPreserved<ScopDetectionWrapperPass>();
-  AU.addPreserved<ScalarEvolutionWrapperPass>();
-  AU.addPreserved<SCEVAAWrapperPass>();
-  AU.addPreserved<OptimizationRemarkEmitterWrapperPass>();
-  AU.addPreserved<RegionInfoPass>();
-  AU.addPreserved<ScopInfoRegionPass>();
-  AU.addPreserved<TargetTransformInfoWrapperPass>();
-}
 
 namespace polly {
 template class OwningInnerAnalysisManagerProxy<ScopAnalysisManager, Function>;
@@ -115,7 +84,7 @@ bool ScopAnalysisManagerFunctionProxy::Result::invalidate(
   // Even if all analyses were preserved, we still need to run deferred
   // invalidation
   for (auto &S : *SI) {
-    Optional<PreservedAnalyses> InnerPA;
+    std::optional<PreservedAnalyses> InnerPA;
     auto *scop = S.second.get();
     if (!scop)
       continue;

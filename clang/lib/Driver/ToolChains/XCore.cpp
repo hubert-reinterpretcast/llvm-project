@@ -7,10 +7,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "XCore.h"
-#include "CommonArgs.h"
+#include "clang/Driver/CommonArgs.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
-#include "clang/Driver/Options.h"
+#include "clang/Options/Options.h"
 #include "llvm/Option/ArgList.h"
 #include <cstdlib> // ::getenv
 
@@ -53,7 +53,7 @@ void tools::XCore::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
 
   const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("xcc"));
   C.addCommand(std::make_unique<Command>(JA, *this, ResponseFileSupport::None(),
-                                         Exec, CmdArgs, Inputs));
+                                         Exec, CmdArgs, Inputs, Output));
 }
 
 void tools::XCore::Linker::ConstructJob(Compilation &C, const JobAction &JA,
@@ -63,11 +63,10 @@ void tools::XCore::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                         const char *LinkingOutput) const {
   ArgStringList CmdArgs;
 
+  assert((Output.isFilename() || Output.isNothing()) && "Invalid output.");
   if (Output.isFilename()) {
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
-  } else {
-    assert(Output.isNothing() && "Invalid output.");
   }
 
   if (Args.hasArg(options::OPT_v))
@@ -82,7 +81,7 @@ void tools::XCore::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("xcc"));
   C.addCommand(std::make_unique<Command>(JA, *this, ResponseFileSupport::None(),
-                                         Exec, CmdArgs, Inputs));
+                                         Exec, CmdArgs, Inputs, Output));
 }
 
 /// XCore tool chain
@@ -102,7 +101,9 @@ Tool *XCoreToolChain::buildLinker() const {
 
 bool XCoreToolChain::isPICDefault() const { return false; }
 
-bool XCoreToolChain::isPIEDefault() const { return false; }
+bool XCoreToolChain::isPIEDefault(const llvm::opt::ArgList &Args) const {
+  return false;
+}
 
 bool XCoreToolChain::isPICDefaultForced() const { return false; }
 
@@ -112,7 +113,7 @@ bool XCoreToolChain::hasBlocksRuntime() const { return false; }
 
 void XCoreToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
                                                ArgStringList &CC1Args) const {
-  if (DriverArgs.hasArg(clang::driver::options::OPT_nostdinc) ||
+  if (DriverArgs.hasArg(options::OPT_nostdinc) ||
       DriverArgs.hasArg(options::OPT_nostdlibinc))
     return;
   if (const char *cl_include_dir = getenv("XCC_C_INCLUDE_PATH")) {
@@ -128,11 +129,15 @@ void XCoreToolChain::addClangTargetOptions(const ArgList &DriverArgs,
                                            ArgStringList &CC1Args,
                                            Action::OffloadKind) const {
   CC1Args.push_back("-nostdsysteminc");
+  // Set `-fno-use-cxa-atexit` to default.
+  if (!DriverArgs.hasFlag(options::OPT_fuse_cxa_atexit,
+                          options::OPT_fno_use_cxa_atexit, false))
+    CC1Args.push_back("-fno-use-cxa-atexit");
 }
 
 void XCoreToolChain::AddClangCXXStdlibIncludeArgs(
     const ArgList &DriverArgs, ArgStringList &CC1Args) const {
-  if (DriverArgs.hasArg(clang::driver::options::OPT_nostdinc) ||
+  if (DriverArgs.hasArg(options::OPT_nostdinc) ||
       DriverArgs.hasArg(options::OPT_nostdlibinc) ||
       DriverArgs.hasArg(options::OPT_nostdincxx))
     return;

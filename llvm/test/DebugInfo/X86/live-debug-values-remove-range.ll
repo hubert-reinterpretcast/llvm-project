@@ -1,4 +1,4 @@
-; RUN: llc -mtriple=x86_64-unknown-unknown %s -o - -stop-after=livedebugvalues | FileCheck %s
+; RUN: llc -mtriple=x86_64-unknown-unknown %s -o - -stop-after=livedebugvalues -experimental-debug-variable-locations=true | FileCheck %s
 ;
 ; In the simple loop below, the location of the variable "toast" is %bar in
 ; the entry block, then set to constant zero at the end of the loop. We cannot
@@ -35,16 +35,15 @@
 ; before the loop, and its position re-stated in each block.
 ; CHECK-LABEL: name: quux
 ; CHECK:       DBG_VALUE $edi, $noreg, ![[QUUXVARNUM]]
-; CHECK:       DBG_VALUE [[QUUXLOC:[a-zA-Z0-9$_]+]], $noreg, ![[QUUXVARNUM]]
 ; CHECK-LABEL: bb.1.loop
-; CHECK:       DBG_VALUE [[QUUXLOC]], $noreg, ![[QUUXVARNUM]]
+; CHECK:       DBG_VALUE $ebx, $noreg, ![[QUUXVARNUM]]
 ; CHECK-NOT:   DBG_VALUE $noreg
 ; CHECK-LABEL: bb.2.exit
-; CHECK:       DBG_VALUE [[QUUXLOC]], $noreg, ![[QUUXVARNUM]]
+; CHECK:       DBG_VALUE $ebx, $noreg, ![[QUUXVARNUM]]
 ; CHECK-NOT:   DBG_VALUE $noreg
 
-declare i1 @booler()
-declare void @escape(i32)
+declare dso_local i1 @booler()
+declare dso_local void @escape(i32)
 declare void @llvm.dbg.value(metadata, metadata, metadata)
 @glob = global i32 0
 
@@ -58,7 +57,7 @@ loop:
   call void @llvm.dbg.value(metadata i32 0, metadata !3, metadata !DIExpression()), !dbg !6
   br i1 %retval, label %loop2, label %exit
 loop2:
-  store i32 %bar, i32 *@glob
+  store i32 %bar, ptr @glob
   br label %loop
 exit:
   ret i32 %bar
@@ -109,6 +108,6 @@ exit:
 !106 = !DILocation(line: 1, scope: !104)
 !113 = !{!103}
 !203 = !DILocalVariable(name: "teacake", scope: !204, file: !2, line: 1, type: !16)
-!204 = distinct !DISubprogram(name: "toad", scope: !2, file: !2, line: 1, spFlags: DISPFlagDefinition, unit: !1, retainedNodes: !113, type: !14, isDefinition: true)
+!204 = distinct !DISubprogram(name: "toad", scope: !2, file: !2, line: 1, spFlags: DISPFlagDefinition, unit: !1, retainedNodes: !213, type: !14, isDefinition: true)
 !206 = !DILocation(line: 1, scope: !204)
 !213 = !{!203}

@@ -12,21 +12,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/SPIRV/SPIRVBinaryUtils.h"
-#include "mlir/Dialect/SPIRV/SPIRVDialect.h"
-#include "mlir/Dialect/SPIRV/SPIRVModule.h"
-#include "mlir/Dialect/SPIRV/SPIRVOps.h"
-#include "mlir/Dialect/SPIRV/Serialization.h"
+#include "mlir/Target/SPIRV/Deserialization.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVDialect.h"
+#include "mlir/Dialect/SPIRV/IR/SPIRVOps.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/Target/SPIRV/SPIRVBinaryUtils.h"
 #include "gmock/gmock.h"
 
 #include <memory>
 
 using namespace mlir;
-
-// Load the SPIRV dialect
-static DialectRegistration<spirv::SPIRVDialect> SPIRVRegistration;
 
 using ::testing::StrEq;
 
@@ -39,15 +35,16 @@ using ::testing::StrEq;
 class DeserializationTest : public ::testing::Test {
 protected:
   DeserializationTest() {
+    context.getOrLoadDialect<mlir::spirv::SPIRVDialect>();
     // Register a diagnostic handler to capture the diagnostic so that we can
     // check it later.
     context.getDiagEngine().registerHandler([&](Diagnostic &diag) {
-      diagnostic.reset(new Diagnostic(std::move(diag)));
+      diagnostic = std::make_unique<Diagnostic>(std::move(diag));
     });
   }
 
-  /// Performs deserialization and returns the constructed spv.module op.
-  spirv::OwningSPIRVModuleRef deserialize() {
+  /// Performs deserialization and returns the constructed spirv.module op.
+  OwningOpRef<spirv::ModuleOp> deserialize() {
     return spirv::deserialize(binary, &context);
   }
 
@@ -159,7 +156,7 @@ TEST_F(DeserializationTest, InsufficientWordFailure) {
   addHeader();
   binary.push_back((2u << 16) |
                    static_cast<uint32_t>(spirv::Opcode::OpTypeVoid));
-  // Missing word for type <id>
+  // Missing word for type <id>.
 
   ASSERT_FALSE(deserialize());
   expectDiagnostic("insufficient words for the last instruction");
@@ -248,7 +245,7 @@ TEST_F(DeserializationTest, FunctionMissingEndFailure) {
   auto voidType = addVoidType();
   auto fnType = addFunctionType(voidType, {});
   addFunction(voidType, fnType);
-  // Missing OpFunctionEnd
+  // Missing OpFunctionEnd.
 
   ASSERT_FALSE(deserialize());
   expectDiagnostic("expected OpFunctionEnd instruction");
@@ -260,7 +257,7 @@ TEST_F(DeserializationTest, FunctionMissingParameterFailure) {
   auto i32Type = addIntType(32);
   auto fnType = addFunctionType(voidType, {i32Type});
   addFunction(voidType, fnType);
-  // Missing OpFunctionParameter
+  // Missing OpFunctionParameter.
 
   ASSERT_FALSE(deserialize());
   expectDiagnostic("expected OpFunctionParameter instruction");
@@ -271,7 +268,7 @@ TEST_F(DeserializationTest, FunctionMissingLabelForFirstBlockFailure) {
   auto voidType = addVoidType();
   auto fnType = addFunctionType(voidType, {});
   addFunction(voidType, fnType);
-  // Missing OpLabel
+  // Missing OpLabel.
   addReturn();
   addFunctionEnd();
 

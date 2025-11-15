@@ -13,16 +13,20 @@
 
 namespace mlir {
 
-class MLIRContext;
 class ModuleOp;
+class Pass;
 template <typename T>
 class OperationPass;
-class OwningRewritePatternList;
+class RewritePatternSet;
 
-void populateShapeToStandardConversionPatterns(
-    OwningRewritePatternList &patterns, MLIRContext *ctx);
+#define GEN_PASS_DECL_CONVERTSHAPECONSTRAINTSPASS
+#define GEN_PASS_DECL_CONVERTSHAPETOSTANDARDPASS
+#include "mlir/Conversion/Passes.h.inc"
 
-std::unique_ptr<OperationPass<ModuleOp>> createConvertShapeToStandardPass();
+void populateShapeToStandardConversionPatterns(RewritePatternSet &patterns);
+
+void populateConvertShapeConstraintsConversionPatterns(
+    RewritePatternSet &patterns);
 
 } // namespace mlir
 

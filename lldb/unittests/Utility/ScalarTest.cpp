@@ -13,9 +13,15 @@
 #include "lldb/Utility/Scalar.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/Utility/StreamString.h"
+#include "lldb/lldb-enumerations.h"
+#include "llvm/ADT/APSInt.h"
 #include "llvm/Testing/Support/Error.h"
 
+#include <algorithm>
+#include <cmath>
+
 using namespace lldb_private;
+using llvm::APFloat;
 using llvm::APInt;
 using llvm::Failed;
 using llvm::Succeeded;
@@ -92,6 +98,7 @@ TEST(ScalarTest, Getters) {
   CheckConversion<unsigned long long>(0x8765432112345678ull);
   CheckConversion<float>(42.25f);
   CheckConversion<double>(42.25);
+  CheckConversion<long double>(42.25L);
 
   EXPECT_EQ(APInt(128, 1) << 70, Scalar(std::pow(2.0f, 70.0f)).SInt128(APInt()));
   EXPECT_EQ(APInt(128, -1, true) << 70,
@@ -111,11 +118,17 @@ TEST(ScalarTest, RightShiftOperator) {
   int a = 0x00001000;
   int b = 0xFFFFFFFF;
   int c = 4;
+  unsigned d = 0xFFFFFFFF;
+  unsigned short e = 0xFFFF;
   Scalar a_scalar(a);
   Scalar b_scalar(b);
   Scalar c_scalar(c);
+  Scalar d_scalar(d);
+  Scalar e_scalar(e);
   ASSERT_EQ(a >> c, a_scalar >> c_scalar);
   ASSERT_EQ(b >> c, b_scalar >> c_scalar);
+  ASSERT_EQ(d >> c, d_scalar >> c_scalar);
+  ASSERT_EQ(e >> c, e_scalar >> c_scalar);
 }
 
 TEST(ScalarTest, GetBytes) {
@@ -135,12 +148,8 @@ TEST(ScalarTest, GetBytes) {
   Scalar f_scalar;
   DataExtractor e_data(e, sizeof(e), endian::InlHostByteOrder(),
                        sizeof(void *));
-  Status e_error =
-      e_scalar.SetValueFromData(e_data, lldb::eEncodingUint, sizeof(e));
   DataExtractor f_data(f, sizeof(f), endian::InlHostByteOrder(),
                        sizeof(void *));
-  Status f_error =
-      f_scalar.SetValueFromData(f_data, lldb::eEncodingUint, sizeof(f));
   a_scalar.GetBytes(Storage);
   ASSERT_EQ(0, memcmp(&a, Storage, sizeof(a)));
   b_scalar.GetBytes(Storage);
@@ -149,12 +158,82 @@ TEST(ScalarTest, GetBytes) {
   ASSERT_EQ(0, memcmp(&c, Storage, sizeof(c)));
   d_scalar.GetBytes(Storage);
   ASSERT_EQ(0, memcmp(&d, Storage, sizeof(d)));
-  ASSERT_EQ(0, e_error.Fail());
+  ASSERT_THAT_ERROR(
+      e_scalar.SetValueFromData(e_data, lldb::eEncodingUint, sizeof(e))
+          .ToError(),
+      llvm::Succeeded());
   e_scalar.GetBytes(Storage);
   ASSERT_EQ(0, memcmp(e, Storage, sizeof(e)));
-  ASSERT_EQ(0, f_error.Fail());
+  ASSERT_THAT_ERROR(
+      f_scalar.SetValueFromData(f_data, lldb::eEncodingUint, sizeof(f))
+          .ToError(),
+      llvm::Succeeded());
   f_scalar.GetBytes(Storage);
   ASSERT_EQ(0, memcmp(f, Storage, sizeof(f)));
+}
+
+TEST(ScalarTest, GetData) {
+  auto get_data = [](llvm::APSInt v) {
+    DataExtractor data;
+    Scalar(v).GetData(data);
+    return data.GetData().vec();
+  };
+
+  auto vec = [](std::initializer_list<uint8_t> l) {
+    std::vector<uint8_t> v(l.begin(), l.end());
+    if (endian::InlHostByteOrder() == lldb::eByteOrderLittle)
+      std::reverse(v.begin(), v.end());
+    return v;
+  };
+
+  EXPECT_THAT(
+      get_data(llvm::APSInt::getMaxValue(/*numBits=*/1, /*Unsigned=*/true)),
+      vec({0x01}));
+
+  EXPECT_THAT(
+      get_data(llvm::APSInt::getMaxValue(/*numBits=*/8, /*Unsigned=*/true)),
+      vec({0xff}));
+
+  EXPECT_THAT(
+      get_data(llvm::APSInt::getMaxValue(/*numBits=*/9, /*Unsigned=*/true)),
+      vec({0x01, 0xff}));
+
+  auto get_data_with_size = [](llvm::APInt v, size_t size) {
+    DataExtractor data;
+    Scalar(v).GetData(data, size);
+    return data.GetData().vec();
+  };
+
+  EXPECT_THAT(get_data_with_size(llvm::APInt(16, 0x0123), 8),
+              vec({0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x23}));
+
+  EXPECT_THAT(get_data_with_size(llvm::APInt(32, 0x01234567), 4),
+              vec({0x01, 0x23, 0x45, 0x67}));
+
+  EXPECT_THAT(get_data_with_size(llvm::APInt(48, 0xABCD01234567UL), 4),
+              vec({0x01, 0x23, 0x45, 0x67}));
+
+  EXPECT_THAT(get_data_with_size(llvm::APInt(64, 0xABCDEF0123456789UL), 2),
+              vec({0x67, 0x89}));
+}
+
+TEST(ScalarTest, SetValueFromData) {
+  uint8_t a[] = {1, 2, 3, 4};
+  Scalar s;
+  ASSERT_THAT_ERROR(
+      s.SetValueFromData(
+           DataExtractor(a, sizeof(a), lldb::eByteOrderLittle, sizeof(void *)),
+           lldb::eEncodingSint, sizeof(a))
+          .ToError(),
+      llvm::Succeeded());
+  EXPECT_EQ(0x04030201, s);
+  ASSERT_THAT_ERROR(
+      s.SetValueFromData(
+           DataExtractor(a, sizeof(a), lldb::eByteOrderBig, sizeof(void *)),
+           lldb::eEncodingSint, sizeof(a))
+          .ToError(),
+      llvm::Succeeded());
+  EXPECT_EQ(0x01020304, s);
 }
 
 TEST(ScalarTest, CastOperations) {
@@ -216,7 +295,7 @@ TEST(ScalarTest, ExtractBitfield) {
 
 template <typename T> static std::string ScalarGetValue(T value) {
   StreamString stream;
-  Scalar(value).GetValue(&stream, false);
+  Scalar(value).GetValue(stream, false);
   return std::string(stream.GetString());
 }
 
@@ -248,7 +327,7 @@ TEST(ScalarTest, GetValue) {
             ScalarGetValue(std::numeric_limits<unsigned long long>::max()));
 }
 
-TEST(ScalarTest, LongLongAssigmentOperator) {
+TEST(ScalarTest, LongLongAssignmentOperator) {
   Scalar ull;
   ull = std::numeric_limits<unsigned long long>::max();
   EXPECT_EQ(std::numeric_limits<unsigned long long>::max(), ull.ULongLong());
@@ -264,45 +343,37 @@ TEST(ScalarTest, Division) {
   Scalar r = lhs / rhs;
   EXPECT_TRUE(r.IsValid());
   EXPECT_EQ(r, Scalar(2.5));
+
+  Scalar inf = Scalar(1) / Scalar(0.0f);
+  Scalar int0 = Scalar(1) / Scalar(0);
+  Scalar ref_inf = llvm::APFloat::getInf(llvm::APFloat::IEEEsingle());
+  EXPECT_EQ(inf, ref_inf);
+  EXPECT_FALSE(int0.IsValid());
 }
 
 TEST(ScalarTest, Promotion) {
-  static Scalar::Type int_types[] = {
-      Scalar::e_sint,    Scalar::e_uint,      Scalar::e_slong,
-      Scalar::e_ulong,   Scalar::e_slonglong, Scalar::e_ulonglong,
-      Scalar::e_sint128, Scalar::e_uint128,   Scalar::e_sint256,
-      Scalar::e_uint256,
-      Scalar::e_void // sentinel
-  };
+  Scalar a(47);
+  EXPECT_TRUE(a.IntegralPromote(64, true));
+  EXPECT_TRUE(a.IsSigned());
+  EXPECT_EQ(APInt(64, 47), a.UInt128(APInt()));
 
-  static Scalar::Type float_types[] = {
-      Scalar::e_float, Scalar::e_double, Scalar::e_long_double,
-      Scalar::e_void // sentinel
-  };
+  EXPECT_FALSE(a.IntegralPromote(32, true));
+  EXPECT_FALSE(a.IntegralPromote(32, false));
+  EXPECT_TRUE(a.IsSigned());
 
-  for (int i = 0; int_types[i] != Scalar::e_void; ++i) {
-    for (int j = 0; float_types[j] != Scalar::e_void; ++j) {
-      Scalar lhs(2);
-      EXPECT_TRUE(lhs.Promote(int_types[i])) << "int promotion #" << i;
-      Scalar rhs(0.5f);
-      EXPECT_TRUE(rhs.Promote(float_types[j])) << "float promotion #" << j;
-      Scalar x(2.5f);
-      EXPECT_TRUE(x.Promote(float_types[j]));
-      EXPECT_EQ(lhs + rhs, x);
-    }
-  }
+  EXPECT_TRUE(a.IntegralPromote(64, false));
+  EXPECT_FALSE(a.IsSigned());
+  EXPECT_EQ(APInt(64, 47), a.UInt128(APInt()));
 
-  for (int i = 0; float_types[i] != Scalar::e_void; ++i) {
-    for (int j = 0; float_types[j] != Scalar::e_void; ++j) {
-      Scalar lhs(2);
-      EXPECT_TRUE(lhs.Promote(float_types[i])) << "float promotion #" << i;
-      Scalar rhs(0.5f);
-      EXPECT_TRUE(rhs.Promote(float_types[j])) << "float promotion #" << j;
-      Scalar x(2.5f);
-      EXPECT_TRUE(x.Promote(float_types[j]));
-      EXPECT_EQ(lhs + rhs, x);
-    }
-  }
+  EXPECT_FALSE(a.IntegralPromote(64, true));
+
+  EXPECT_TRUE(a.FloatPromote(APFloat::IEEEdouble()));
+  EXPECT_EQ(Scalar::e_float, a.GetType());
+  EXPECT_EQ(47.0, a.Double());
+
+  EXPECT_FALSE(a.FloatPromote(APFloat::IEEEsingle()));
+  EXPECT_TRUE(a.FloatPromote(APFloat::x87DoubleExtended()));
+  EXPECT_EQ(47.0L, a.LongDouble());
 }
 
 TEST(ScalarTest, SetValueFromCString) {
@@ -334,23 +405,29 @@ TEST(ScalarTest, SetValueFromCString) {
   EXPECT_THAT_ERROR(
       a.SetValueFromCString("-123", lldb::eEncodingUint, 8).ToError(),
       Failed());
+  EXPECT_THAT_ERROR(
+      a.SetValueFromCString("-2147483648", lldb::eEncodingSint, 4).ToError(),
+      Succeeded());
+  EXPECT_EQ(-2147483648, a);
+  EXPECT_THAT_ERROR(
+      a.SetValueFromCString("-2147483649", lldb::eEncodingSint, 4).ToError(),
+      Failed());
+  EXPECT_THAT_ERROR(
+      a.SetValueFromCString("47.25", lldb::eEncodingIEEE754, 4).ToError(),
+      Succeeded());
+  EXPECT_EQ(47.25f, a);
+  EXPECT_THAT_ERROR(
+      a.SetValueFromCString("asdf", lldb::eEncodingIEEE754, 4).ToError(),
+      Failed());
 }
 
 TEST(ScalarTest, APIntConstructor) {
-  auto width_array = {8, 16, 32};
-  for (auto &w : width_array) {
-    Scalar A(APInt(w, 24));
-    EXPECT_EQ(A.GetType(), Scalar::e_sint);
+  for (auto &width : {8, 16, 32}) {
+    Scalar A(APInt(width, 24));
+    EXPECT_TRUE(A.IsSigned());
+    EXPECT_EQ(A.GetType(), Scalar::e_int);
+    EXPECT_EQ(APInt(width, 24), A.UInt128(APInt()));
   }
-
-  Scalar B(APInt(64, 42));
-  EXPECT_EQ(B.GetType(), Scalar::GetBestTypeForBitSize(64, true));
-  Scalar C(APInt(128, 96));
-  EXPECT_EQ(C.GetType(), Scalar::e_sint128);
-  Scalar D(APInt(256, 156));
-  EXPECT_EQ(D.GetType(), Scalar::e_sint256);
-  Scalar E(APInt(512, 456));
-  EXPECT_EQ(E.GetType(), Scalar::e_sint512);
 }
 
 TEST(ScalarTest, Scalar_512) {
@@ -360,17 +437,17 @@ TEST(ScalarTest, Scalar_512) {
   ASSERT_TRUE(Z.IsZero());
 
   Scalar S(APInt(512, 2000));
-  ASSERT_STREQ(S.GetTypeAsCString(), "int512_t");
-  ASSERT_STREQ(S.GetValueTypeAsCString(Scalar::e_sint512), "int512_t");
+  ASSERT_STREQ(S.GetTypeAsCString(), "int");
 
   ASSERT_TRUE(S.MakeUnsigned());
-  EXPECT_EQ(S.GetType(), Scalar::e_uint512);
-  ASSERT_STREQ(S.GetTypeAsCString(), "uint512_t");
-  ASSERT_STREQ(S.GetValueTypeAsCString(Scalar::e_uint512), "uint512_t");
+  EXPECT_EQ(S.GetType(), Scalar::e_int);
+  EXPECT_FALSE(S.IsSigned());
+  ASSERT_STREQ(S.GetTypeAsCString(), "int");
   EXPECT_EQ(S.GetByteSize(), 64U);
 
   ASSERT_TRUE(S.MakeSigned());
-  EXPECT_EQ(S.GetType(), Scalar::e_sint512);
+  EXPECT_EQ(S.GetType(), Scalar::e_int);
+  EXPECT_TRUE(S.IsSigned());
   EXPECT_EQ(S.GetByteSize(), 64U);
 }
 
@@ -384,4 +461,62 @@ TEST(ScalarTest, TruncOrExtendTo) {
   EXPECT_EQ(S.UInt128(APInt()), APInt(24, 0x0fffffu));
   S.TruncOrExtendTo(16, false);
   EXPECT_EQ(S.UInt128(APInt()), APInt(16, 0xffffu));
+}
+
+TEST(ScalarTest, APFloatConstructor) {
+  llvm::APFloat my_single(llvm::APFloatBase::IEEEsingle(), "3.14159");
+  llvm::APFloat my_double(llvm::APFloatBase::IEEEdouble(), "3.14159");
+  Scalar S(my_single);
+  Scalar D(my_double);
+
+  EXPECT_EQ(S.GetType(), Scalar::e_float);
+  EXPECT_EQ(D.GetType(), Scalar::e_float);
+  ASSERT_TRUE(S != D);
+}
+
+TEST(ScalarTest, CreateAPFloats) {
+  llvm::APFloat ap_float(llvm::APFloatBase::IEEEsingle(), "3.14159");
+  llvm::APFloat ap_nan = llvm::APFloat::getNaN(llvm::APFloat::IEEEsingle());
+  llvm::APSInt int1("12");
+  llvm::APSInt int2("-4");
+  Scalar I1(int1);
+  Scalar I2(int2);
+  Scalar F(ap_float);
+
+  llvm::APFloat out1_float = I1.CreateAPFloatFromAPSInt(lldb::eBasicTypeFloat);
+  llvm::APFloat out1_double =
+      I1.CreateAPFloatFromAPSInt(lldb::eBasicTypeDouble);
+  llvm::APFloat out1_longdouble =
+      I1.CreateAPFloatFromAPSInt(lldb::eBasicTypeLongDouble);
+  llvm::APFloat out1_nan =
+      I1.CreateAPFloatFromAPSInt(lldb::eBasicTypeFloatComplex);
+  EXPECT_TRUE(!out1_float.isNegative());
+  EXPECT_TRUE(!out1_double.isNegative());
+  EXPECT_TRUE(out1_double.bitwiseIsEqual(out1_longdouble));
+  EXPECT_FALSE(out1_double.bitwiseIsEqual(out1_float));
+  EXPECT_TRUE(out1_nan.bitwiseIsEqual(ap_nan));
+
+  llvm::APFloat out2_float = I2.CreateAPFloatFromAPSInt(lldb::eBasicTypeFloat);
+  llvm::APFloat out2_double =
+      I2.CreateAPFloatFromAPSInt(lldb::eBasicTypeDouble);
+  llvm::APFloat out2_longdouble =
+      I2.CreateAPFloatFromAPSInt(lldb::eBasicTypeLongDouble);
+  llvm::APFloat out2_nan =
+      I2.CreateAPFloatFromAPSInt(lldb::eBasicTypeFloatComplex);
+  EXPECT_TRUE(out2_float.isNegative());
+  EXPECT_TRUE(out2_double.isNegative());
+  EXPECT_TRUE(out2_double.bitwiseIsEqual(out2_longdouble));
+  EXPECT_FALSE(out2_double.bitwiseIsEqual(out2_float));
+  EXPECT_TRUE(out2_nan.bitwiseIsEqual(ap_nan));
+
+  llvm::APFloat out3_float = F.CreateAPFloatFromAPFloat(lldb::eBasicTypeFloat);
+  llvm::APFloat out3_double =
+      F.CreateAPFloatFromAPFloat(lldb::eBasicTypeDouble);
+  llvm::APFloat out3_longdouble =
+      F.CreateAPFloatFromAPFloat(lldb::eBasicTypeLongDouble);
+  llvm::APFloat out3_nan =
+      F.CreateAPFloatFromAPFloat(lldb::eBasicTypeFloatComplex);
+  EXPECT_TRUE(out3_double.bitwiseIsEqual(out3_longdouble));
+  EXPECT_FALSE(out3_double.bitwiseIsEqual(out3_float));
+  EXPECT_TRUE(out3_nan.bitwiseIsEqual(ap_nan));
 }

@@ -1,4 +1,4 @@
-//===--- UpgradeGoogletestCaseCheck.cpp - clang-tidy ----------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,18 +11,17 @@
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Lex/PPCallbacks.h"
 #include "clang/Lex/Preprocessor.h"
+#include <optional>
 
 using namespace clang::ast_matchers;
 
-namespace clang {
-namespace tidy {
-namespace google {
+namespace clang::tidy::google {
 
 static const llvm::StringRef RenameCaseToSuiteMessage =
     "Google Test APIs named with 'case' are deprecated; use equivalent APIs "
     "named with 'suite'";
 
-static llvm::Optional<llvm::StringRef>
+static std::optional<llvm::StringRef>
 getNewMacroName(llvm::StringRef MacroName) {
   std::pair<llvm::StringRef, llvm::StringRef> ReplacementMap[] = {
       {"TYPED_TEST_CASE", "TYPED_TEST_SUITE"},
@@ -37,7 +36,7 @@ getNewMacroName(llvm::StringRef MacroName) {
       return Mapping.second;
   }
 
-  return llvm::None;
+  return std::nullopt;
 }
 
 namespace {
@@ -46,7 +45,7 @@ class UpgradeGoogletestCasePPCallback : public PPCallbacks {
 public:
   UpgradeGoogletestCasePPCallback(UpgradeGoogletestCaseCheck *Check,
                                   Preprocessor *PP)
-      : ReplacementFound(false), Check(Check), PP(PP) {}
+      : Check(Check), PP(PP) {}
 
   void MacroExpands(const Token &MacroNameTok, const MacroDefinition &MD,
                     SourceRange Range, const MacroArgs *) override {
@@ -65,9 +64,9 @@ public:
       // We check if the newly defined macro is one of the target replacements.
       // This ensures that the check creates warnings only if it is including a
       // recent enough version of Google Test.
-      llvm::StringRef FileName = PP->getSourceManager().getFilename(
+      const llvm::StringRef FileName = PP->getSourceManager().getFilename(
           MD->getMacroInfo()->getDefinitionLoc());
-      ReplacementFound = FileName.endswith("gtest/gtest-typed-test.h") &&
+      ReplacementFound = FileName.ends_with("gtest/gtest-typed-test.h") &&
                          PP->getSpelling(MacroNameTok) == "TYPED_TEST_SUITE";
     }
   }
@@ -95,25 +94,25 @@ private:
     if (!ReplacementFound)
       return;
 
-    std::string Name = PP->getSpelling(MacroNameTok);
+    const std::string Name = PP->getSpelling(MacroNameTok);
 
-    llvm::Optional<llvm::StringRef> Replacement = getNewMacroName(Name);
+    std::optional<llvm::StringRef> Replacement = getNewMacroName(Name);
     if (!Replacement)
       return;
 
-    llvm::StringRef FileName = PP->getSourceManager().getFilename(
+    const llvm::StringRef FileName = PP->getSourceManager().getFilename(
         MD.getMacroInfo()->getDefinitionLoc());
-    if (!FileName.endswith("gtest/gtest-typed-test.h"))
+    if (!FileName.ends_with("gtest/gtest-typed-test.h"))
       return;
 
-    DiagnosticBuilder Diag = Check->diag(Loc, RenameCaseToSuiteMessage);
+    const DiagnosticBuilder Diag = Check->diag(Loc, RenameCaseToSuiteMessage);
 
     if (Action == CheckAction::Rename)
       Diag << FixItHint::CreateReplacement(
           CharSourceRange::getTokenRange(Loc, Loc), *Replacement);
   }
 
-  bool ReplacementFound;
+  bool ReplacementFound = false;
   UpgradeGoogletestCaseCheck *Check;
   Preprocessor *PP;
 };
@@ -196,6 +195,12 @@ void UpgradeGoogletestCaseCheck::registerMatchers(MatchFinder *Finder) {
       usingDecl(hasAnyUsingShadowDecl(hasTargetDecl(TestCaseTypeAlias)))
           .bind("using"),
       this);
+  Finder->addMatcher(
+      typeLoc(loc(usingType(hasUnderlyingType(
+                  typedefType(hasDeclaration(TestCaseTypeAlias))))),
+              unless(hasAncestor(decl(isImplicit()))), LocationFilter)
+          .bind("typeloc"),
+      this);
 }
 
 static llvm::StringRef getNewMethodName(llvm::StringRef CurrentName) {
@@ -229,7 +234,7 @@ static bool isInInstantiation(const NodeType &Node,
 template <typename NodeType>
 static bool isInTemplate(const NodeType &Node,
                          const MatchFinder::MatchResult &Result) {
-  internal::Matcher<NodeType> IsInsideTemplate =
+  const internal::Matcher<NodeType> IsInsideTemplate =
       hasAncestor(decl(anyOf(classTemplateDecl(), functionTemplateDecl())));
   return !match(IsInsideTemplate, Node, *Result.Context).empty();
 }
@@ -252,8 +257,13 @@ getAliasNameRange(const MatchFinder::MatchResult &Result) {
     return CharSourceRange::getTokenRange(
         Using->getNameInfo().getSourceRange());
   }
-  return CharSourceRange::getTokenRange(
-      Result.Nodes.getNodeAs<TypeLoc>("typeloc")->getSourceRange());
+  TypeLoc TL = *Result.Nodes.getNodeAs<TypeLoc>("typeloc");
+  if (auto QTL = TL.getAs<QualifiedTypeLoc>())
+    TL = QTL.getUnqualifiedLoc();
+
+  if (auto TTL = TL.getAs<TypedefTypeLoc>())
+    return CharSourceRange::getTokenRange(TTL.getNameLoc());
+  return CharSourceRange::getTokenRange(TL.castAs<UsingTypeLoc>().getNameLoc());
 }
 
 void UpgradeGoogletestCaseCheck::check(const MatchFinder::MatchResult &Result) {
@@ -262,8 +272,8 @@ void UpgradeGoogletestCaseCheck::check(const MatchFinder::MatchResult &Result) {
   if (const auto *Method = Result.Nodes.getNodeAs<CXXMethodDecl>("method")) {
     ReplacementText = getNewMethodName(Method->getName());
 
-    bool IsInInstantiation;
-    bool IsInTemplate;
+    bool IsInInstantiation = false;
+    bool IsInTemplate = false;
     bool AddFix = true;
     if (const auto *Call = Result.Nodes.getNodeAs<CXXMemberCallExpr>("call")) {
       const auto *Callee = llvm::cast<MemberExpr>(Call->getCallee());
@@ -298,8 +308,7 @@ void UpgradeGoogletestCaseCheck::check(const MatchFinder::MatchResult &Result) {
     }
 
     if (IsInInstantiation) {
-      if (MatchedTemplateLocations.count(
-              ReplacementRange.getBegin().getRawEncoding()) == 0) {
+      if (!MatchedTemplateLocations.contains(ReplacementRange.getBegin())) {
         // For each location matched in a template instantiation, we check if
         // the location can also be found in `MatchedTemplateLocations`. If it
         // is not found, that means the expression did not create a match
@@ -313,8 +322,7 @@ void UpgradeGoogletestCaseCheck::check(const MatchFinder::MatchResult &Result) {
     if (IsInTemplate) {
       // We gather source locations from template matches not in template
       // instantiations for future matches.
-      MatchedTemplateLocations.insert(
-          ReplacementRange.getBegin().getRawEncoding());
+      MatchedTemplateLocations.insert(ReplacementRange.getBegin());
     }
 
     if (!AddFix) {
@@ -332,7 +340,7 @@ void UpgradeGoogletestCaseCheck::check(const MatchFinder::MatchResult &Result) {
     // will only be instantiated with the true type name, `TestSuite`.
   }
 
-  DiagnosticBuilder Diag =
+  const DiagnosticBuilder Diag =
       diag(ReplacementRange.getBegin(), RenameCaseToSuiteMessage);
 
   ReplacementRange = Lexer::makeFileCharRange(
@@ -345,6 +353,4 @@ void UpgradeGoogletestCaseCheck::check(const MatchFinder::MatchResult &Result) {
   Diag << FixItHint::CreateReplacement(ReplacementRange, ReplacementText);
 }
 
-} // namespace google
-} // namespace tidy
-} // namespace clang
+} // namespace clang::tidy::google

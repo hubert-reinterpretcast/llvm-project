@@ -6,9 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// UNSUPPORTED: libcpp-has-no-threads
+// UNSUPPORTED: no-threads
 // UNSUPPORTED: c++03, c++11
-// XFAIL: dylib-has-no-shared_mutex
 
 // <shared_mutex>
 

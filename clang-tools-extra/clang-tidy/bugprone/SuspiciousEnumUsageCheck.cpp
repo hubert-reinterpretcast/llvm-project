@@ -1,4 +1,4 @@
-//===--- SuspiciousEnumUsageCheck.cpp - clang-tidy-------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,9 +13,7 @@
 
 using namespace clang::ast_matchers;
 
-namespace clang {
-namespace tidy {
-namespace bugprone {
+namespace clang::tidy::bugprone {
 
 static const char DifferentEnumErrorMessage[] =
     "enum values are from different enum types";
@@ -56,13 +54,13 @@ static int enumLength(const EnumDecl *EnumDec) {
 
 static bool hasDisjointValueRange(const EnumDecl *Enum1,
                                   const EnumDecl *Enum2) {
-  ValueRange Range1(Enum1), Range2(Enum2);
+  const ValueRange Range1(Enum1), Range2(Enum2);
   return llvm::APSInt::compareValues(Range1.MaxVal, Range2.MinVal) < 0 ||
          llvm::APSInt::compareValues(Range2.MaxVal, Range1.MinVal) < 0;
 }
 
 static bool isNonPowerOf2NorNullLiteral(const EnumConstantDecl *EnumConst) {
-  llvm::APSInt Val = EnumConst->getInitVal();
+  const llvm::APSInt &Val = EnumConst->getInitVal();
   if (Val.isPowerOf2() || !Val.getBoolValue())
     return false;
   const Expr *InitExpr = EnumConst->getInitExpr();
@@ -79,7 +77,7 @@ static bool isMaxValAllBitSetLiteral(const EnumDecl *EnumDec) {
       });
 
   if (const Expr *InitExpr = EnumConst->getInitExpr()) {
-    return EnumConst->getInitVal().countTrailingOnes() ==
+    return EnumConst->getInitVal().countr_one() ==
                EnumConst->getInitVal().getActiveBits() &&
            isa<IntegerLiteral>(InitExpr->IgnoreImpCasts());
   }
@@ -87,9 +85,7 @@ static bool isMaxValAllBitSetLiteral(const EnumDecl *EnumDec) {
 }
 
 static int countNonPowOfTwoLiteralNum(const EnumDecl *EnumDec) {
-  return std::count_if(
-      EnumDec->enumerator_begin(), EnumDec->enumerator_end(),
-      [](const EnumConstantDecl *E) { return isNonPowerOf2NorNullLiteral(E); });
+  return llvm::count_if(EnumDec->enumerators(), isNonPowerOf2NorNullLiteral);
 }
 
 /// Check if there is one or two enumerators that are not a power of 2 and are
@@ -98,9 +94,9 @@ static int countNonPowOfTwoLiteralNum(const EnumDecl *EnumDec) {
 /// last enumerator is the sum of the lesser values (and initialized by a
 /// literal) or when it could contain consecutive values.
 static bool isPossiblyBitMask(const EnumDecl *EnumDec) {
-  ValueRange VR(EnumDec);
-  int EnumLen = enumLength(EnumDec);
-  int NonPowOfTwoCounter = countNonPowOfTwoLiteralNum(EnumDec);
+  const ValueRange VR(EnumDec);
+  const int EnumLen = enumLength(EnumDec);
+  const int NonPowOfTwoCounter = countNonPowOfTwoLiteralNum(EnumDec);
   return NonPowOfTwoCounter >= 1 && NonPowOfTwoCounter <= 2 &&
          NonPowOfTwoCounter < EnumLen / 2 &&
          (VR.MaxVal - VR.MinVal != EnumLen - 1) &&
@@ -110,43 +106,41 @@ static bool isPossiblyBitMask(const EnumDecl *EnumDec) {
 SuspiciousEnumUsageCheck::SuspiciousEnumUsageCheck(StringRef Name,
                                                    ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
-      StrictMode(Options.getLocalOrGlobal("StrictMode", false)) {}
+      StrictMode(Options.get("StrictMode", false)) {}
 
 void SuspiciousEnumUsageCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "StrictMode", StrictMode);
 }
 
 void SuspiciousEnumUsageCheck::registerMatchers(MatchFinder *Finder) {
-  const auto enumExpr = [](StringRef RefName, StringRef DeclName) {
-    return expr(ignoringImpCasts(expr().bind(RefName)),
-                ignoringImpCasts(hasType(enumDecl().bind(DeclName))));
+  const auto EnumExpr = [](StringRef RefName, StringRef DeclName) {
+    return expr(hasType(enumDecl().bind(DeclName))).bind(RefName);
   };
 
   Finder->addMatcher(
-      binaryOperator(hasOperatorName("|"), hasLHS(enumExpr("", "enumDecl")),
-                     hasRHS(expr(enumExpr("", "otherEnumDecl"),
-                                 ignoringImpCasts(hasType(enumDecl(
-                                     unless(equalsBoundNode("enumDecl"))))))))
+      binaryOperator(
+          hasOperatorName("|"), hasLHS(hasType(enumDecl().bind("enumDecl"))),
+          hasRHS(hasType(enumDecl(unless(equalsBoundNode("enumDecl")))
+                             .bind("otherEnumDecl"))))
           .bind("diffEnumOp"),
       this);
 
   Finder->addMatcher(
       binaryOperator(hasAnyOperatorName("+", "|"),
-                     hasLHS(enumExpr("lhsExpr", "enumDecl")),
-                     hasRHS(expr(enumExpr("rhsExpr", ""),
-                                 ignoringImpCasts(hasType(
-                                     enumDecl(equalsBoundNode("enumDecl"))))))),
+                     hasLHS(EnumExpr("lhsExpr", "enumDecl")),
+                     hasRHS(expr(hasType(enumDecl(equalsBoundNode("enumDecl"))))
+                                .bind("rhsExpr"))),
       this);
 
   Finder->addMatcher(
       binaryOperator(
           hasAnyOperatorName("+", "|"),
-          hasOperands(expr(hasType(isInteger()), unless(enumExpr("", ""))),
-                      enumExpr("enumExpr", "enumDecl"))),
+          hasOperands(expr(hasType(isInteger()), unless(hasType(enumDecl()))),
+                      EnumExpr("enumExpr", "enumDecl"))),
       this);
 
   Finder->addMatcher(binaryOperator(hasAnyOperatorName("|=", "+="),
-                                    hasRHS(enumExpr("enumExpr", "enumDecl"))),
+                                    hasRHS(EnumExpr("enumExpr", "enumDecl"))),
                      this);
 }
 
@@ -177,8 +171,7 @@ void SuspiciousEnumUsageCheck::check(const MatchFinder::MatchResult &Result) {
     // Skip when one of the parameters is an empty enum. The
     // hasDisjointValueRange function could not decide the values properly in
     // case of an empty enum.
-    if (EnumDec->enumerator_begin() == EnumDec->enumerator_end() ||
-        OtherEnumDec->enumerator_begin() == OtherEnumDec->enumerator_end())
+    if (EnumDec->enumerators().empty() || OtherEnumDec->enumerators().empty())
       return;
 
     if (!hasDisjointValueRange(EnumDec, OtherEnumDec))
@@ -212,6 +205,4 @@ void SuspiciousEnumUsageCheck::check(const MatchFinder::MatchResult &Result) {
   checkSuspiciousBitmaskUsage(RhsExpr, EnumDec);
 }
 
-} // namespace bugprone
-} // namespace tidy
-} // namespace clang
+} // namespace clang::tidy::bugprone

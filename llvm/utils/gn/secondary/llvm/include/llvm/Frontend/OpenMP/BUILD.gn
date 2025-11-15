@@ -1,16 +1,17 @@
 import("//llvm/utils/TableGen/tablegen.gni")
 
-tablegen("OMP") {
+tablegen("OMPh") {
   visibility = [ ":public_tablegen" ]
   args = [ "-gen-directive-decl" ]
   output_name = "OMP.h.inc"
+  td_file = "OMP.td"
+  tblgen_target = "//llvm/utils/TableGen:llvm-min-tblgen"
 }
 
-tablegen("OMPImpl") {
+tablegen("OMP") {
   visibility = [ ":public_tablegen" ]
   args = [ "-gen-directive-impl" ]
-  td_file = "OMP.td"
-  output_name = "OMP.cpp.inc"
+  tblgen_target = "//llvm/utils/TableGen:llvm-min-tblgen"
 }
 
 # Groups all tablegen() calls that create .inc files that are included in
@@ -21,6 +22,6 @@ group("public_tablegen") {
   public_deps = [
     # Frontend/OpenMP's public headers include OMP.h.inc.
     ":OMP",
-    ":OMPImpl",
+    ":OMPh",
   ]
 }

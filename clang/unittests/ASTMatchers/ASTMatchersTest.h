@@ -20,15 +20,14 @@ namespace clang {
 namespace ast_matchers {
 
 using clang::tooling::buildASTFromCodeWithArgs;
+using clang::tooling::FileContentMappings;
+using clang::tooling::FrontendActionFactory;
 using clang::tooling::newFrontendActionFactory;
 using clang::tooling::runToolOnCodeWithArgs;
-using clang::tooling::FrontendActionFactory;
-using clang::tooling::FileContentMappings;
 
 class BoundNodesCallback {
 public:
   virtual ~BoundNodesCallback() {}
-  virtual bool run(const BoundNodes *BoundNodes) = 0;
   virtual bool run(const BoundNodes *BoundNodes, ASTContext *Context) = 0;
   virtual void onEndOfTranslationUnit() {}
 };
@@ -38,7 +37,8 @@ public:
 // If 'FindResultVerifier' is NULL, sets *Verified to true when Run is called.
 class VerifyMatch : public MatchFinder::MatchCallback {
 public:
-  VerifyMatch(std::unique_ptr<BoundNodesCallback> FindResultVerifier, bool *Verified)
+  VerifyMatch(std::unique_ptr<BoundNodesCallback> FindResultVerifier,
+              bool *Verified)
       : Verified(Verified), FindResultReviewer(std::move(FindResultVerifier)) {}
 
   void run(const MatchFinder::MatchResult &Result) override {
@@ -61,22 +61,28 @@ private:
 
 inline ArrayRef<TestLanguage> langCxx11OrLater() {
   static const TestLanguage Result[] = {Lang_CXX11, Lang_CXX14, Lang_CXX17,
-                                        Lang_CXX20};
+                                        Lang_CXX20, Lang_CXX23};
   return ArrayRef<TestLanguage>(Result);
 }
 
 inline ArrayRef<TestLanguage> langCxx14OrLater() {
-  static const TestLanguage Result[] = {Lang_CXX14, Lang_CXX17, Lang_CXX20};
+  static const TestLanguage Result[] = {Lang_CXX14, Lang_CXX17, Lang_CXX20,
+                                        Lang_CXX23};
   return ArrayRef<TestLanguage>(Result);
 }
 
 inline ArrayRef<TestLanguage> langCxx17OrLater() {
-  static const TestLanguage Result[] = {Lang_CXX17, Lang_CXX20};
+  static const TestLanguage Result[] = {Lang_CXX17, Lang_CXX20, Lang_CXX23};
   return ArrayRef<TestLanguage>(Result);
 }
 
 inline ArrayRef<TestLanguage> langCxx20OrLater() {
-  static const TestLanguage Result[] = {Lang_CXX20};
+  static const TestLanguage Result[] = {Lang_CXX20, Lang_CXX23};
+  return ArrayRef<TestLanguage>(Result);
+}
+
+inline ArrayRef<TestLanguage> langCxx23OrLater() {
+  static const TestLanguage Result[] = {Lang_CXX23};
   return ArrayRef<TestLanguage>(Result);
 }
 
@@ -104,7 +110,7 @@ testing::AssertionResult matchesConditionally(
   // Append additional arguments at the end to allow overriding the default
   // choices that we made above.
   llvm::copy(CompileArgs, std::back_inserter(Args));
-  if (llvm::find(Args, "-target") == Args.end()) {
+  if (!llvm::is_contained(Args, "-target")) {
     // Use an unknown-unknown triple so we don't instantiate the full system
     // toolchain.  On Linux, instantiating the toolchain involves stat'ing
     // large portions of /usr/lib, and this slows down not only this test, but
@@ -124,17 +130,16 @@ testing::AssertionResult matchesConditionally(
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
   if (Found != DynamicFound) {
-    return testing::AssertionFailure() << "Dynamic match result ("
-                                       << DynamicFound
-                                       << ") does not match static result ("
-                                       << Found << ")";
+    return testing::AssertionFailure()
+           << "Dynamic match result (" << DynamicFound
+           << ") does not match static result (" << Found << ")";
   }
   if (!Found && ExpectMatch) {
     return testing::AssertionFailure()
-      << "Could not find match in \"" << Code << "\"";
+           << "Could not find match in \"" << Code << "\"";
   } else if (Found && !ExpectMatch) {
     return testing::AssertionFailure()
-      << "Found unexpected match in \"" << Code << "\"";
+           << "Found unexpected match in \"" << Code << "\"";
   }
   return testing::AssertionSuccess();
 }
@@ -184,11 +189,6 @@ testing::AssertionResult matchesC(const Twine &Code, const T &AMatcher) {
 }
 
 template <typename T>
-testing::AssertionResult notMatchesC(const Twine &Code, const T &AMatcher) {
-  return matchesConditionally(Code, AMatcher, false, {Lang_C89});
-}
-
-template <typename T>
 testing::AssertionResult notMatchesObjC(const Twine &Code, const T &AMatcher) {
   return matchesObjC(Code, AMatcher, false);
 }
@@ -216,7 +216,8 @@ matchesConditionallyWithCuda(const Twine &Code, const T &AMatcher,
       "                      size_t sharedSize = 0,"
       "                      cudaStream_t stream = 0);"
       "extern \"C\" unsigned __cudaPushCallConfiguration("
-      "    dim3 gridDim, dim3 blockDim, size_t sharedMem = 0, void *stream = 0);";
+      "    dim3 gridDim, dim3 blockDim, size_t sharedMem = 0, void *stream = "
+      "0);";
 
   bool Found = false, DynamicFound = false;
   MatchFinder Finder;
@@ -233,22 +234,20 @@ matchesConditionallyWithCuda(const Twine &Code, const T &AMatcher,
   std::vector<std::string> Args = {
       "-xcuda",  "-fno-ms-extensions",     "--cuda-host-only",     "-nocudainc",
       "-target", "x86_64-unknown-unknown", std::string(CompileArg)};
-  if (!runToolOnCodeWithArgs(Factory->create(),
-                             CudaHeader + Code, Args)) {
+  if (!runToolOnCodeWithArgs(Factory->create(), CudaHeader + Code, Args)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
   if (Found != DynamicFound) {
-    return testing::AssertionFailure() << "Dynamic match result ("
-                                       << DynamicFound
-                                       << ") does not match static result ("
-                                       << Found << ")";
+    return testing::AssertionFailure()
+           << "Dynamic match result (" << DynamicFound
+           << ") does not match static result (" << Found << ")";
   }
   if (!Found && ExpectMatch) {
     return testing::AssertionFailure()
-      << "Could not find match in \"" << Code << "\"";
+           << "Could not find match in \"" << Code << "\"";
   } else if (Found && !ExpectMatch) {
     return testing::AssertionFailure()
-      << "Found unexpected match in \"" << Code << "\"";
+           << "Found unexpected match in \"" << Code << "\"";
   }
   return testing::AssertionSuccess();
 }
@@ -277,45 +276,79 @@ testing::AssertionResult notMatchesWithOpenMP(const Twine &Code,
 }
 
 template <typename T>
+testing::AssertionResult matchesWithOpenMP51(const Twine &Code,
+                                             const T &AMatcher) {
+  return matchesConditionally(Code, AMatcher, true,
+                              {"-fopenmp=libomp", "-fopenmp-version=51"});
+}
+
+template <typename T>
+testing::AssertionResult notMatchesWithOpenMP51(const Twine &Code,
+                                                const T &AMatcher) {
+  return matchesConditionally(Code, AMatcher, false,
+                              {"-fopenmp=libomp", "-fopenmp-version=51"});
+}
+
+template <typename T>
+testing::AssertionResult matchesWithFixedpoint(const std::string &Code,
+                                               const T &AMatcher) {
+  return matchesConditionally(Code, AMatcher, true, {"-ffixed-point"},
+                              FileContentMappings(), "input.c");
+}
+
+template <typename T>
+testing::AssertionResult notMatchesWithFixedpoint(const std::string &Code,
+                                                  const T &AMatcher) {
+  return matchesConditionally(Code, AMatcher, false, {"-ffixed-point"},
+                              FileContentMappings(), "input.c");
+}
+
+template <typename T>
 testing::AssertionResult matchAndVerifyResultConditionally(
     const Twine &Code, const T &AMatcher,
-    std::unique_ptr<BoundNodesCallback> FindResultVerifier, bool ExpectResult) {
+    std::unique_ptr<BoundNodesCallback> FindResultVerifier, bool ExpectResult,
+    ArrayRef<std::string> Args = {}, StringRef Filename = "input.cc") {
   bool VerifiedResult = false;
   MatchFinder Finder;
-  VerifyMatch VerifyVerifiedResult(std::move(FindResultVerifier), &VerifiedResult);
+  VerifyMatch VerifyVerifiedResult(std::move(FindResultVerifier),
+                                   &VerifiedResult);
   Finder.addMatcher(AMatcher, &VerifyVerifiedResult);
   std::unique_ptr<FrontendActionFactory> Factory(
       newFrontendActionFactory(&Finder));
   // Some tests use typeof, which is a gnu extension.  Using an explicit
   // unknown-unknown triple is good for a large speedup, because it lets us
   // avoid constructing a full system triple.
-  std::vector<std::string> Args = {"-std=gnu++98", "-target",
-                                   "i386-unknown-unknown"};
-  if (!runToolOnCodeWithArgs(Factory->create(), Code, Args)) {
+  std::vector<std::string> CompileArgs = {"-std=gnu++11", "-target",
+                                          "i386-unknown-unknown"};
+  // Append additional arguments at the end to allow overriding the default
+  // choices that we made above.
+  llvm::copy(Args, std::back_inserter(CompileArgs));
+
+  if (!runToolOnCodeWithArgs(Factory->create(), Code, CompileArgs, Filename)) {
     return testing::AssertionFailure() << "Parsing error in \"" << Code << "\"";
   }
   if (!VerifiedResult && ExpectResult) {
     return testing::AssertionFailure()
-      << "Could not verify result in \"" << Code << "\"";
+           << "Could not verify result in \"" << Code << "\"";
   } else if (VerifiedResult && !ExpectResult) {
     return testing::AssertionFailure()
-      << "Verified unexpected result in \"" << Code << "\"";
+           << "Verified unexpected result in \"" << Code << "\"";
   }
 
   VerifiedResult = false;
   SmallString<256> Buffer;
-  std::unique_ptr<ASTUnit> AST(
-      buildASTFromCodeWithArgs(Code.toStringRef(Buffer), Args));
-  if (!AST.get())
-    return testing::AssertionFailure() << "Parsing error in \"" << Code
-                                       << "\" while building AST";
+  std::unique_ptr<ASTUnit> AST(buildASTFromCodeWithArgs(
+      Code.toStringRef(Buffer), CompileArgs, Filename));
+  if (!AST)
+    return testing::AssertionFailure()
+           << "Parsing error in \"" << Code << "\" while building AST";
   Finder.matchAST(AST->getASTContext());
   if (!VerifiedResult && ExpectResult) {
     return testing::AssertionFailure()
-      << "Could not verify result in \"" << Code << "\" with AST";
+           << "Could not verify result in \"" << Code << "\" with AST";
   } else if (VerifiedResult && !ExpectResult) {
     return testing::AssertionFailure()
-      << "Verified unexpected result in \"" << Code << "\" with AST";
+           << "Verified unexpected result in \"" << Code << "\" with AST";
   }
 
   return testing::AssertionSuccess();
@@ -324,26 +357,30 @@ testing::AssertionResult matchAndVerifyResultConditionally(
 // FIXME: Find better names for these functions (or document what they
 // do more precisely).
 template <typename T>
-testing::AssertionResult matchAndVerifyResultTrue(
-    const Twine &Code, const T &AMatcher,
-    std::unique_ptr<BoundNodesCallback> FindResultVerifier) {
+testing::AssertionResult
+matchAndVerifyResultTrue(const Twine &Code, const T &AMatcher,
+                         std::unique_ptr<BoundNodesCallback> FindResultVerifier,
+                         ArrayRef<std::string> Args = {},
+                         StringRef Filename = "input.cc") {
   return matchAndVerifyResultConditionally(
-      Code, AMatcher, std::move(FindResultVerifier), true);
+      Code, AMatcher, std::move(FindResultVerifier),
+      /*ExpectResult=*/true, Args, Filename);
 }
 
 template <typename T>
 testing::AssertionResult matchAndVerifyResultFalse(
     const Twine &Code, const T &AMatcher,
-    std::unique_ptr<BoundNodesCallback> FindResultVerifier) {
+    std::unique_ptr<BoundNodesCallback> FindResultVerifier,
+    ArrayRef<std::string> Args = {}, StringRef Filename = "input.cc") {
   return matchAndVerifyResultConditionally(
-      Code, AMatcher, std::move(FindResultVerifier), false);
+      Code, AMatcher, std::move(FindResultVerifier),
+      /*ExpectResult=*/false, Args, Filename);
 }
 
 // Implements a run method that returns whether BoundNodes contains a
 // Decl bound to Id that can be dynamically cast to T.
 // Optionally checks that the check succeeded a specific number of times.
-template <typename T>
-class VerifyIdIsBoundTo : public BoundNodesCallback {
+template <typename T> class VerifyIdIsBoundTo : public BoundNodesCallback {
 public:
   // Create an object that checks that a node of type \c T was bound to \c Id.
   // Does not check for a certain number of matches.
@@ -379,14 +416,14 @@ public:
     EXPECT_EQ("", Name);
   }
 
-  bool run(const BoundNodes *Nodes) override {
+  bool run(const BoundNodes *Nodes, ASTContext * /*Context*/) override {
     const BoundNodes::IDToNodeMap &M = Nodes->getMap();
     if (Nodes->getNodeAs<T>(Id)) {
       ++Count;
       if (const NamedDecl *Named = Nodes->getNodeAs<NamedDecl>(Id)) {
         Name = Named->getNameAsString();
       } else if (const NestedNameSpecifier *NNS =
-        Nodes->getNodeAs<NestedNameSpecifier>(Id)) {
+                     Nodes->getNodeAs<NestedNameSpecifier>(Id)) {
         llvm::raw_string_ostream OS(Name);
         NNS->print(OS, PrintingPolicy(LangOptions()));
       }
@@ -398,12 +435,8 @@ public:
       return true;
     }
     EXPECT_TRUE(M.count(Id) == 0 ||
-      M.find(Id)->second.template get<T>() == nullptr);
+                M.find(Id)->second.template get<T>() == nullptr);
     return false;
-  }
-
-  bool run(const BoundNodes *Nodes, ASTContext *Context) override {
-    return run(Nodes);
   }
 
 private:
@@ -437,4 +470,4 @@ protected:
 } // namespace ast_matchers
 } // namespace clang
 
-#endif  // LLVM_CLANG_UNITTESTS_AST_MATCHERS_AST_MATCHERS_TEST_H
+#endif // LLVM_CLANG_UNITTESTS_AST_MATCHERS_AST_MATCHERS_TEST_H

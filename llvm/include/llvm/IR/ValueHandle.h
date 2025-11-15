@@ -17,6 +17,7 @@
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
 #include <cassert>
 
 namespace llvm {
@@ -105,7 +106,7 @@ protected:
   }
 
   /// Remove this ValueHandle from its current use list.
-  void RemoveFromUseList();
+  LLVM_ABI void RemoveFromUseList();
 
   /// Clear the underlying pointer without clearing the use list.
   ///
@@ -115,8 +116,8 @@ protected:
 
 public:
   // Callbacks made from Value.
-  static void ValueIsDeleted(Value *V);
-  static void ValueIsRAUWd(Value *Old, Value *New);
+  LLVM_ABI static void ValueIsDeleted(Value *V);
+  LLVM_ABI static void ValueIsRAUWd(Value *Old, Value *New);
 
 private:
   // Internal implementation details.
@@ -128,13 +129,13 @@ private:
   ///
   /// List is the address of either the head of the list or a Next node within
   /// the existing use list.
-  void AddToExistingUseList(ValueHandleBase **List);
+  LLVM_ABI void AddToExistingUseList(ValueHandleBase **List);
 
   /// Add this ValueHandle to the use list after Node.
   void AddToExistingUseListAfter(ValueHandleBase *Node);
 
   /// Add this ValueHandle to the use list for V.
-  void AddToUseList();
+  LLVM_ABI void AddToUseList();
 };
 
 /// A nullable Value handle that is nullable.
@@ -258,13 +259,13 @@ template <> struct simplify_type<const WeakTrackingVH> {
 /// class turns into a trivial wrapper around a pointer.
 template <typename ValueTy>
 class AssertingVH
-#ifndef NDEBUG
-  : public ValueHandleBase
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+    : public ValueHandleBase
 #endif
-  {
+{
   friend struct DenseMapInfo<AssertingVH<ValueTy>>;
 
-#ifndef NDEBUG
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
   Value *getRawValPtr() const { return ValueHandleBase::getValPtr(); }
   void setRawValPtr(Value *P) { ValueHandleBase::operator=(P); }
 #else
@@ -280,14 +281,14 @@ class AssertingVH
   void setValPtr(ValueTy *P) { setRawValPtr(GetAsValue(P)); }
 
 public:
-#ifndef NDEBUG
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
   AssertingVH() : ValueHandleBase(Assert) {}
   AssertingVH(ValueTy *P) : ValueHandleBase(Assert, GetAsValue(P)) {}
   AssertingVH(const AssertingVH &RHS) : ValueHandleBase(Assert, RHS) {}
 #else
   AssertingVH() : ThePtr(nullptr) {}
   AssertingVH(ValueTy *P) : ThePtr(GetAsValue(P)) {}
-  AssertingVH(const AssertingVH<ValueTy> &) = default;
+  AssertingVH(const AssertingVH &) = default;
 #endif
 
   operator ValueTy*() const {
@@ -380,7 +381,7 @@ public:
 /// class can be used as the key of a map, as long as the user takes it out of
 /// the map before calling setValPtr() (since the map has to rearrange itself
 /// when the pointer changes).  Unlike ValueHandleBase, this class has a vtable.
-class CallbackVH : public ValueHandleBase {
+class LLVM_ABI CallbackVH : public ValueHandleBase {
   virtual void anchor();
 protected:
   ~CallbackVH() = default;
@@ -442,9 +443,9 @@ public:
 /// PoisoningVH's as it moves. This is required because in non-assert mode this
 /// class turns into a trivial wrapper around a pointer.
 template <typename ValueTy>
-class PoisoningVH
-#ifndef NDEBUG
-    final : public CallbackVH
+class PoisoningVH final
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+    : public CallbackVH
 #endif
 {
   friend struct DenseMapInfo<PoisoningVH<ValueTy>>;
@@ -453,7 +454,7 @@ class PoisoningVH
   static Value *GetAsValue(Value *V) { return V; }
   static Value *GetAsValue(const Value *V) { return const_cast<Value *>(V); }
 
-#ifndef NDEBUG
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
   /// A flag tracking whether this value has been poisoned.
   ///
   /// On delete and RAUW, we leave the value pointer alone so that as a raw
@@ -478,7 +479,7 @@ class PoisoningVH
     Poisoned = true;
     RemoveFromUseList();
   }
-#else // NDEBUG
+#else // LLVM_ENABLE_ABI_BREAKING_CHECKS
   Value *ThePtr = nullptr;
 
   Value *getRawValPtr() const { return ThePtr; }
@@ -486,14 +487,16 @@ class PoisoningVH
 #endif
 
   ValueTy *getValPtr() const {
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
     assert(!Poisoned && "Accessed a poisoned value handle!");
+#endif
     return static_cast<ValueTy *>(getRawValPtr());
   }
   void setValPtr(ValueTy *P) { setRawValPtr(GetAsValue(P)); }
 
 public:
   PoisoningVH() = default;
-#ifndef NDEBUG
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
   PoisoningVH(ValueTy *P) : CallbackVH(GetAsValue(P)) {}
   PoisoningVH(const PoisoningVH &RHS)
       : CallbackVH(RHS), Poisoned(RHS.Poisoned) {}

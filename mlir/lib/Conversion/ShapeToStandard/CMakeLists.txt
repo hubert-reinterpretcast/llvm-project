@@ -1,8 +1,9 @@
-set(LLVM_TARGET_DEFINITIONS ShapeToStandardPatterns.td)
-mlir_tablegen(ShapeToStandardPatterns.inc -gen-rewriters)
-add_public_tablegen_target(ShapeToStandardPatternsIncGen)
+set(LLVM_TARGET_DEFINITIONS ShapeToStandard.td)
+mlir_tablegen(ShapeToStandard.cpp.inc -gen-rewriters)
+add_public_tablegen_target(ShapeToStandardIncGen)
 
 add_mlir_conversion_library(MLIRShapeToStandard
+  ConvertShapeConstraints.cpp
   ShapeToStandard.cpp
 
   ADDITIONAL_HEADER_DIRS
@@ -10,16 +11,17 @@ add_mlir_conversion_library(MLIRShapeToStandard
 
   DEPENDS
   MLIRConversionPassIncGen
-  ShapeToStandardPatternsIncGen
+  ShapeToStandardIncGen
 
   LINK_COMPONENTS
   Core
 
   LINK_LIBS PUBLIC
-  MLIREDSC
+  MLIRArithDialect
   MLIRIR
-  MLIRShape
+  MLIRShapeDialect
+  MLIRTensorDialect
   MLIRPass
-  MLIRSCF
+  MLIRSCFDialect
   MLIRTransforms
   )

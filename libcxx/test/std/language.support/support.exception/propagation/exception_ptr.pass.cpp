@@ -33,5 +33,5 @@ int main(int, char**)
     p3 = nullptr;
     assert(p3 == nullptr);
 
-  return 0;
+    return 0;
 }

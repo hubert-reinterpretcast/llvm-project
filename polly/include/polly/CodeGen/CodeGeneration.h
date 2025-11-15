@@ -14,11 +14,11 @@
 #include "llvm/IR/PassManager.h"
 
 namespace polly {
+class IslAstInfo;
 
 enum VectorizerChoice {
   VECTORIZER_NONE,
   VECTORIZER_STRIPMINE,
-  VECTORIZER_POLLY,
 };
 extern VectorizerChoice PollyVectorizerChoice;
 
@@ -28,12 +28,14 @@ extern VectorizerChoice PollyVectorizerChoice;
 /// UnreachableInst.
 void markBlockUnreachable(BasicBlock &Block, PollyIRBuilder &Builder);
 
-struct CodeGenerationPass : public PassInfoMixin<CodeGenerationPass> {
+struct CodeGenerationPass final : PassInfoMixin<CodeGenerationPass> {
   PreservedAnalyses run(Scop &S, ScopAnalysisManager &SAM,
                         ScopStandardAnalysisResults &AR, SPMUpdater &U);
 };
 
 extern bool PerfMonitoring;
+
+bool runCodeGeneration(Scop &S, llvm::RegionInfo &RI, IslAstInfo &AI);
 } // namespace polly
 
 #endif // POLLY_CODEGENERATION_H

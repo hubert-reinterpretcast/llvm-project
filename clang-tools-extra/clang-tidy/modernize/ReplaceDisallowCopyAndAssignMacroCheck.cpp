@@ -1,4 +1,4 @@
-//===--- ReplaceDisallowCopyAndAssignMacroCheck.cpp - clang-tidy ----------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,10 +12,9 @@
 #include "clang/Lex/PPCallbacks.h"
 #include "clang/Lex/Preprocessor.h"
 #include "llvm/Support/FormatVariadic.h"
+#include <optional>
 
-namespace clang {
-namespace tidy {
-namespace modernize {
+namespace clang::tidy::modernize {
 
 namespace {
 
@@ -27,23 +26,23 @@ public:
 
   void MacroExpands(const Token &MacroNameTok, const MacroDefinition &MD,
                     SourceRange Range, const MacroArgs *Args) override {
-    IdentifierInfo *Info = MacroNameTok.getIdentifierInfo();
+    const IdentifierInfo *Info = MacroNameTok.getIdentifierInfo();
     if (!Info || !Args || Args->getNumMacroArguments() != 1)
       return;
     if (Info->getName() != Check.getMacroName())
       return;
-    // The first argument to the DISALLOW_COPY_AND_ASSIGN macro is exptected to
+    // The first argument to the DISALLOW_COPY_AND_ASSIGN macro is expected to
     // be the class name.
     const Token *ClassNameTok = Args->getUnexpArgument(0);
     if (Args->ArgNeedsPreexpansion(ClassNameTok, PP))
       // For now we only support simple argument that don't need to be
       // pre-expanded.
       return;
-    clang::IdentifierInfo *ClassIdent = ClassNameTok->getIdentifierInfo();
+    const clang::IdentifierInfo *ClassIdent = ClassNameTok->getIdentifierInfo();
     if (!ClassIdent)
       return;
 
-    std::string Replacement = llvm::formatv(
+    const std::string Replacement = llvm::formatv(
         R"cpp({0}(const {0} &) = delete;
 const {0} &operator=(const {0} &) = delete{1})cpp",
         ClassIdent->getName(), shouldAppendSemi(Range) ? ";" : "");
@@ -60,7 +59,7 @@ private:
   /// \returns \c true if the next token after the given \p MacroLoc is \b not a
   /// semicolon.
   bool shouldAppendSemi(SourceRange MacroLoc) {
-    llvm::Optional<Token> Next = Lexer::findNextToken(
+    std::optional<Token> Next = Lexer::findNextToken(
         MacroLoc.getEnd(), PP.getSourceManager(), PP.getLangOpts());
     return !(Next && Next->is(tok::semi));
   }
@@ -87,6 +86,4 @@ void ReplaceDisallowCopyAndAssignMacroCheck::storeOptions(
   Options.store(Opts, "MacroName", MacroName);
 }
 
-} // namespace modernize
-} // namespace tidy
-} // namespace clang
+} // namespace clang::tidy::modernize

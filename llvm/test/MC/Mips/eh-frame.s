@@ -33,14 +33,13 @@
 // RUN: llvm-readobj -r %t.o | FileCheck --check-prefixes=RELOCS,PIC64 %s
 // RUN: llvm-dwarfdump -eh-frame %t.o | FileCheck --check-prefixes=DWARF64,DWARF64_PIC %s
 
-/// However using the large code model forces R_MIPS_64 since there is no R_MIPS_PC64 relocation:
 // RUN: llvm-mc -filetype=obj %s -o %t.o -triple mips64-unknown-linux-gnu --position-independent --large-code-model
-// RUN: llvm-readobj -r %t.o | FileCheck --check-prefixes=RELOCS,ABS64 %s
-// RUN: llvm-dwarfdump -eh-frame %t.o | FileCheck --check-prefixes=DWARF64,DWARF64_ABS %s
+// RUN: llvm-readobj -r %t.o | FileCheck --check-prefixes=RELOCS,PIC64 %s
+// RUN: llvm-dwarfdump -eh-frame %t.o | FileCheck --check-prefixes=DWARF64,DWARF64_PIC %s
 
 // RUN: llvm-mc -filetype=obj %s -o %t.o -triple mips64el-unknown-linux-gnu --position-independent  --large-code-model
-// RUN: llvm-readobj -r %t.o | FileCheck --check-prefixes=RELOCS,ABS64 %s
-// RUN: llvm-dwarfdump -eh-frame %t.o | FileCheck --check-prefixes=DWARF64,DWARF64_ABS %s
+// RUN: llvm-readobj -r %t.o | FileCheck --check-prefixes=RELOCS,PIC64 %s
+// RUN: llvm-dwarfdump -eh-frame %t.o | FileCheck --check-prefixes=DWARF64,DWARF64_PIC %s
 
 func:
 	.cfi_startproc
@@ -66,9 +65,10 @@ func:
 // DWARF32_PIC-NEXT: Augmentation data: 1B
 //                                      ^^ fde pointer encoding: DW_EH_PE_pcrel | DW_EH_PE_sdata4
 // DWARF32-EMPTY:
-// DWARF32-NEXT:     DW_CFA_def_cfa_register: reg29
+// DWARF32-NEXT:     DW_CFA_def_cfa_register: SP_64
 //
-// DWARF32: 00000014 00000010 00000018 FDE cie=00000000 pc=00000000...00000000
+// DWARF32_ABS: 00000014 00000010 00000018 FDE cie=00000000 pc=00000000...00000000
+// DWARF32_PIC: 00000014 00000010 00000018 FDE cie=00000000 pc=0000001c...0000001c
 // DWARF32-NEXT:     Format:       DWARF32
 // DWARF32-NEXT:     DW_CFA_nop:
 // DWARF32-NEXT:     DW_CFA_nop:
@@ -89,7 +89,7 @@ func:
 // DWARF64_PIC:      Augmentation data: 1B
 //                                      ^^ fde pointer encoding: DW_EH_PE_pcrel | DW_EH_PE_sdata4
 // DWARF64-EMPTY:
-// DWARF64-NEXT:     DW_CFA_def_cfa_register: reg29
+// DWARF64-NEXT:     DW_CFA_def_cfa_register: SP_64
 // DWARF64_PIC-NEXT: DW_CFA_nop:
 //
 // DWARF64_ABS:      00000014 00000018 00000018 FDE cie=00000000 pc=00000000...00000000

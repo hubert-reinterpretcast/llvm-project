@@ -25,7 +25,7 @@ public:
   explicit ARMInstrInfo(const ARMSubtarget &STI);
 
   /// Return the noop instruction to use for a noop.
-  void getNoop(MCInst &NopInst) const override;
+  MCInst getNop() const override;
 
   // Return the non-pre/post incrementing version of 'Opc'. Return 0
   // if there is not such an opcode.
@@ -35,7 +35,7 @@ public:
   /// such, whenever a client has an instance of instruction info, it should
   /// always be able to get register info as well (through this method).
   ///
-  const ARMRegisterInfo &getRegisterInfo() const override { return RI; }
+  const ARMRegisterInfo &getRegisterInfo() const { return RI; }
 
 private:
   void expandLoadStackGuard(MachineBasicBlock::iterator MI) const override;

@@ -28,14 +28,14 @@ template <typename PointerTy, unsigned IntBits, typename IntType,
           typename PtrTraits, typename Info>
 struct RemovePointer<
     PointerIntPair<PointerTy, IntBits, IntType, PtrTraits, Info>> {
-  typedef typename RemovePointer<PointerTy>::type type;
+  using type = typename RemovePointer<PointerTy>::type;
 };
 
 template <typename VectorT>
 class TinyPtrVectorTest : public testing::Test {
 protected:
-  typedef typename VectorT::value_type PtrT;
-  typedef typename RemovePointer<PtrT>::type ValueT;
+  using PtrT = typename VectorT::value_type;
+  using ValueT = typename RemovePointer<PtrT>::type;
   using PtrTraits = PointerLikeTypeTraits<PtrT>;
 
   VectorT V;
@@ -45,7 +45,7 @@ protected:
   std::vector<PtrT> TestPtrs;
 
   TinyPtrVectorTest() {
-    for (size_t i = 0, e = array_lengthof(TestValues); i != e; ++i)
+    for (size_t i = 0, e = std::size(TestValues); i != e; ++i)
       TestPtrs.push_back(PtrT(&TestValues[i]));
 
     std::shuffle(TestPtrs.begin(), TestPtrs.end(), std::mt19937{});
@@ -53,9 +53,7 @@ protected:
 
   PtrT makePtr(ValueT *V) { return PtrT(V); }
 
-  ArrayRef<PtrT> testArray(size_t N) {
-    return makeArrayRef(&TestPtrs[0], N);
-  }
+  ArrayRef<PtrT> testArray(size_t N) { return ArrayRef(&TestPtrs[0], N); }
 
   void appendValues(VectorT &V, ArrayRef<PtrT> Values) {
     for (size_t i = 0, e = Values.size(); i != e; ++i)
@@ -80,10 +78,10 @@ protected:
   }
 };
 
-typedef ::testing::Types<TinyPtrVector<int *>, TinyPtrVector<double *>,
-                         TinyPtrVector<PointerIntPair<int *, 1>>>
-    TinyPtrVectorTestTypes;
-TYPED_TEST_CASE(TinyPtrVectorTest, TinyPtrVectorTestTypes);
+using TinyPtrVectorTestTypes =
+    ::testing::Types<TinyPtrVector<int *>, TinyPtrVector<double *>,
+                     TinyPtrVector<PointerIntPair<int *, 1>>>;
+TYPED_TEST_SUITE(TinyPtrVectorTest, TinyPtrVectorTestTypes, );
 
 TYPED_TEST(TinyPtrVectorTest, EmptyTest) {
   this->expectValues(this->V, this->testArray(0));

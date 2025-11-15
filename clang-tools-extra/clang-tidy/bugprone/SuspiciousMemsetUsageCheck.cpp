@@ -1,4 +1,4 @@
-//===--- SuspiciousMemsetUsageCheck.cpp - clang-tidy-----------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -15,16 +15,13 @@
 
 using namespace clang::ast_matchers;
 
-namespace clang {
-namespace tidy {
-namespace bugprone {
+namespace clang::tidy::bugprone {
 
 void SuspiciousMemsetUsageCheck::registerMatchers(MatchFinder *Finder) {
   // Match the standard memset:
   // void *memset(void *buffer, int fill_char, size_t byte_count);
   auto MemsetDecl =
-      functionDecl(hasName("::memset"),
-                   parameterCountIs(3),
+      functionDecl(hasName("::memset"), parameterCountIs(3),
                    hasParameter(0, hasType(pointerType(pointee(voidType())))),
                    hasParameter(1, hasType(isInteger())),
                    hasParameter(2, hasType(isInteger())));
@@ -32,30 +29,27 @@ void SuspiciousMemsetUsageCheck::registerMatchers(MatchFinder *Finder) {
   // Look for memset(x, '0', z). Probably memset(x, 0, z) was intended.
   Finder->addMatcher(
       callExpr(
-          callee(MemsetDecl),
+          callee(MemsetDecl), argumentCountIs(3),
           hasArgument(1, characterLiteral(equals(static_cast<unsigned>('0')))
                              .bind("char-zero-fill")),
-          unless(
-              eachOf(hasArgument(0, anyOf(hasType(pointsTo(isAnyCharacter())),
-                                          hasType(arrayType(hasElementType(
-                                              isAnyCharacter()))))),
-                     isInTemplateInstantiation()))),
+          unless(hasArgument(
+              0, anyOf(hasType(pointsTo(isAnyCharacter())),
+                       hasType(arrayType(hasElementType(isAnyCharacter()))))))),
       this);
 
   // Look for memset with an integer literal in its fill_char argument.
   // Will check if it gets truncated.
-  Finder->addMatcher(callExpr(callee(MemsetDecl),
-                              hasArgument(1, integerLiteral().bind("num-fill")),
-                              unless(isInTemplateInstantiation())),
-                     this);
+  Finder->addMatcher(
+      callExpr(callee(MemsetDecl), argumentCountIs(3),
+               hasArgument(1, integerLiteral().bind("num-fill"))),
+      this);
 
   // Look for memset(x, y, 0) as that is most likely an argument swap.
   Finder->addMatcher(
-      callExpr(callee(MemsetDecl),
+      callExpr(callee(MemsetDecl), argumentCountIs(3),
                unless(hasArgument(1, anyOf(characterLiteral(equals(
                                                static_cast<unsigned>('0'))),
-                                           integerLiteral()))),
-               unless(isInTemplateInstantiation()))
+                                           integerLiteral()))))
           .bind("call"),
       this);
 }
@@ -66,7 +60,7 @@ void SuspiciousMemsetUsageCheck::check(const MatchFinder::MatchResult &Result) {
     // Case 1: fill_char of memset() is a character '0'. Probably an
     // integer zero was intended.
 
-    SourceRange CharRange = CharZeroFill->getSourceRange();
+    const SourceRange CharRange = CharZeroFill->getSourceRange();
     auto Diag =
         diag(CharZeroFill->getBeginLoc(), "memset fill value is char '0', "
                                           "potentially mistaken for int 0");
@@ -88,7 +82,7 @@ void SuspiciousMemsetUsageCheck::check(const MatchFinder::MatchResult &Result) {
     if (!NumFill->EvaluateAsInt(EVResult, *Result.Context))
       return;
 
-    llvm::APSInt NumValue = EVResult.Val.getInt();
+    const llvm::APSInt NumValue = EVResult.Val.getInt();
     if (NumValue >= 0 && NumValue <= UCharMax)
       return;
 
@@ -116,7 +110,7 @@ void SuspiciousMemsetUsageCheck::check(const MatchFinder::MatchResult &Result) {
     Expr::EvalResult EVResult;
     if (!FillChar->isValueDependent() &&
         FillChar->EvaluateAsInt(EVResult, *Result.Context)) {
-      llvm::APSInt Value1 = EVResult.Val.getInt();
+      const llvm::APSInt Value1 = EVResult.Val.getInt();
       if (Value1 == 0 || Value1.isNegative())
         return;
     }
@@ -126,8 +120,10 @@ void SuspiciousMemsetUsageCheck::check(const MatchFinder::MatchResult &Result) {
     // and fix-its to swap the arguments.
     auto D = diag(Call->getBeginLoc(),
                   "memset of size zero, potentially swapped arguments");
-    StringRef RHSString = tooling::fixit::getText(*ByteCount, *Result.Context);
-    StringRef LHSString = tooling::fixit::getText(*FillChar, *Result.Context);
+    const StringRef RHSString =
+        tooling::fixit::getText(*ByteCount, *Result.Context);
+    const StringRef LHSString =
+        tooling::fixit::getText(*FillChar, *Result.Context);
     if (LHSString.empty() || RHSString.empty())
       return;
 
@@ -136,6 +132,4 @@ void SuspiciousMemsetUsageCheck::check(const MatchFinder::MatchResult &Result) {
   }
 }
 
-} // namespace bugprone
-} // namespace tidy
-} // namespace clang
+} // namespace clang::tidy::bugprone

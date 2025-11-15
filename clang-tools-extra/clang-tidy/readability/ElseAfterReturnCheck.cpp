@@ -1,4 +1,4 @@
-//===--- ElseAfterReturnCheck.cpp - clang-tidy-----------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,19 +10,38 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Lex/Lexer.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Tooling/FixIt.h"
 #include "llvm/ADT/SmallVector.h"
 
 using namespace clang::ast_matchers;
 
-namespace clang {
-namespace tidy {
-namespace readability {
+namespace clang::tidy::readability {
 
-static const char ReturnStr[] = "return";
-static const char ContinueStr[] = "continue";
-static const char BreakStr[] = "break";
-static const char ThrowStr[] = "throw";
+namespace {
+
+class PPConditionalCollector : public PPCallbacks {
+public:
+  PPConditionalCollector(
+      ElseAfterReturnCheck::ConditionalBranchMap &Collections,
+      const SourceManager &SM)
+      : Collections(Collections), SM(SM) {}
+  void Endif(SourceLocation Loc, SourceLocation IfLoc) override {
+    if (!SM.isWrittenInSameFile(Loc, IfLoc))
+      return;
+    SmallVectorImpl<SourceRange> &Collection = Collections[SM.getFileID(Loc)];
+    assert(Collection.empty() || Collection.back().getEnd() < Loc);
+    Collection.emplace_back(IfLoc, Loc);
+  }
+
+private:
+  ElseAfterReturnCheck::ConditionalBranchMap &Collections;
+  const SourceManager &SM;
+};
+
+} // namespace
+
+static const char InterruptingStr[] = "interrupting";
 static const char WarningMessage[] = "do not use 'else' after '%0'";
 static const char WarnOnUnfixableStr[] = "WarnOnUnfixable";
 static const char WarnOnConditionVariablesStr[] = "WarnOnConditionVariables";
@@ -94,7 +113,7 @@ static bool containsDeclInScope(const Stmt *Node) {
 }
 
 static void removeElseAndBrackets(DiagnosticBuilder &Diag, ASTContext &Context,
-                           const Stmt *Else, SourceLocation ElseLoc) {
+                                  const Stmt *Else, SourceLocation ElseLoc) {
   auto Remap = [&](SourceLocation Loc) {
     return Context.getSourceManager().getExpansionLoc(Loc);
   };
@@ -105,21 +124,21 @@ static void removeElseAndBrackets(DiagnosticBuilder &Diag, ASTContext &Context,
 
   if (const auto *CS = dyn_cast<CompoundStmt>(Else)) {
     Diag << tooling::fixit::createRemoval(ElseLoc);
-    SourceLocation LBrace = CS->getLBracLoc();
-    SourceLocation RBrace = CS->getRBracLoc();
-    SourceLocation RangeStart =
+    const SourceLocation LBrace = CS->getLBracLoc();
+    const SourceLocation RBrace = CS->getRBracLoc();
+    const SourceLocation RangeStart =
         Remap(LBrace).getLocWithOffset(TokLen(LBrace) + 1);
-    SourceLocation RangeEnd = Remap(RBrace).getLocWithOffset(-1);
+    const SourceLocation RangeEnd = Remap(RBrace).getLocWithOffset(-1);
 
-    llvm::StringRef Repl = Lexer::getSourceText(
+    const llvm::StringRef Repl = Lexer::getSourceText(
         CharSourceRange::getTokenRange(RangeStart, RangeEnd),
         Context.getSourceManager(), Context.getLangOpts());
     Diag << tooling::fixit::createReplacement(CS->getSourceRange(), Repl);
   } else {
-    SourceLocation ElseExpandedLoc = Remap(ElseLoc);
-    SourceLocation EndLoc = Remap(Else->getEndLoc());
+    const SourceLocation ElseExpandedLoc = Remap(ElseLoc);
+    const SourceLocation EndLoc = Remap(Else->getEndLoc());
 
-    llvm::StringRef Repl = Lexer::getSourceText(
+    const llvm::StringRef Repl = Lexer::getSourceText(
         CharSourceRange::getTokenRange(
             ElseExpandedLoc.getLocWithOffset(TokLen(ElseLoc) + 1), EndLoc),
         Context.getSourceManager(), Context.getLangOpts());
@@ -140,14 +159,20 @@ void ElseAfterReturnCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, WarnOnConditionVariablesStr, WarnOnConditionVariables);
 }
 
+void ElseAfterReturnCheck::registerPPCallbacks(const SourceManager &SM,
+                                               Preprocessor *PP,
+                                               Preprocessor *ModuleExpanderPP) {
+  PP->addPPCallbacks(
+      std::make_unique<PPConditionalCollector>(this->PPConditionals, SM));
+}
+
 void ElseAfterReturnCheck::registerMatchers(MatchFinder *Finder) {
-  const auto InterruptsControlFlow =
-      stmt(anyOf(returnStmt().bind(ReturnStr), continueStmt().bind(ContinueStr),
-                 breakStmt().bind(BreakStr),
-                 expr(ignoringImplicit(cxxThrowExpr().bind(ThrowStr)))));
+  const auto InterruptsControlFlow = stmt(anyOf(
+      returnStmt().bind(InterruptingStr), continueStmt().bind(InterruptingStr),
+      breakStmt().bind(InterruptingStr), cxxThrowExpr().bind(InterruptingStr)));
   Finder->addMatcher(
       compoundStmt(
-          forEach(ifStmt(unless(isConstexpr()),
+          forEach(ifStmt(unless(isConstexpr()), unless(isConsteval()),
                          hasThen(stmt(
                              anyOf(InterruptsControlFlow,
                                    compoundStmt(has(InterruptsControlFlow))))),
@@ -157,26 +182,77 @@ void ElseAfterReturnCheck::registerMatchers(MatchFinder *Finder) {
       this);
 }
 
+static bool hasPreprocessorBranchEndBetweenLocations(
+    const ElseAfterReturnCheck::ConditionalBranchMap &ConditionalBranchMap,
+    const SourceManager &SM, SourceLocation StartLoc, SourceLocation EndLoc) {
+
+  const SourceLocation ExpandedStartLoc = SM.getExpansionLoc(StartLoc);
+  const SourceLocation ExpandedEndLoc = SM.getExpansionLoc(EndLoc);
+  if (!SM.isWrittenInSameFile(ExpandedStartLoc, ExpandedEndLoc))
+    return false;
+
+  // StartLoc and EndLoc expand to the same macro.
+  if (ExpandedStartLoc == ExpandedEndLoc)
+    return false;
+
+  assert(ExpandedStartLoc < ExpandedEndLoc);
+
+  auto Iter = ConditionalBranchMap.find(SM.getFileID(ExpandedEndLoc));
+
+  if (Iter == ConditionalBranchMap.end() || Iter->getSecond().empty())
+    return false;
+
+  const SmallVectorImpl<SourceRange> &ConditionalBranches = Iter->getSecond();
+
+  assert(llvm::is_sorted(ConditionalBranches,
+                         [](const SourceRange &LHS, const SourceRange &RHS) {
+                           return LHS.getEnd() < RHS.getEnd();
+                         }));
+
+  // First conditional block that ends after ExpandedStartLoc.
+  const auto *Begin =
+      llvm::lower_bound(ConditionalBranches, ExpandedStartLoc,
+                        [](const SourceRange &LHS, const SourceLocation &RHS) {
+                          return LHS.getEnd() < RHS;
+                        });
+  const auto *End = ConditionalBranches.end();
+  for (; Begin != End && Begin->getEnd() < ExpandedEndLoc; ++Begin)
+    if (Begin->getBegin() < ExpandedStartLoc)
+      return true;
+  return false;
+}
+
+static StringRef getControlFlowString(const Stmt &Stmt) {
+  if (isa<ReturnStmt>(Stmt))
+    return "return";
+  if (isa<ContinueStmt>(Stmt))
+    return "continue";
+  if (isa<BreakStmt>(Stmt))
+    return "break";
+  if (isa<CXXThrowExpr>(Stmt))
+    return "throw";
+  llvm_unreachable("Unknown control flow interrupter");
+}
+
 void ElseAfterReturnCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *If = Result.Nodes.getNodeAs<IfStmt>("if");
   const auto *Else = Result.Nodes.getNodeAs<Stmt>("else");
   const auto *OuterScope = Result.Nodes.getNodeAs<CompoundStmt>("cs");
+  const auto *Interrupt = Result.Nodes.getNodeAs<Stmt>(InterruptingStr);
+  const SourceLocation ElseLoc = If->getElseLoc();
 
-  bool IsLastInScope = OuterScope->body_back() == If;
-  SourceLocation ElseLoc = If->getElseLoc();
+  if (hasPreprocessorBranchEndBetweenLocations(
+          PPConditionals, *Result.SourceManager, Interrupt->getBeginLoc(),
+          ElseLoc))
+    return;
 
-  auto ControlFlowInterruptor = [&]() -> llvm::StringRef {
-    for (llvm::StringRef BindingName :
-         {ReturnStr, ContinueStr, BreakStr, ThrowStr})
-      if (Result.Nodes.getNodeAs<Stmt>(BindingName))
-        return BindingName;
-    return {};
-  }();
+  const bool IsLastInScope = OuterScope->body_back() == If;
+  const StringRef ControlFlowInterrupter = getControlFlowString(*Interrupt);
 
   if (!IsLastInScope && containsDeclInScope(Else)) {
     if (WarnOnUnfixable) {
       // Warn, but don't attempt an autofix.
-      diag(ElseLoc, WarningMessage) << ControlFlowInterruptor;
+      diag(ElseLoc, WarningMessage) << ControlFlowInterrupter;
     }
     return;
   }
@@ -185,10 +261,11 @@ void ElseAfterReturnCheck::check(const MatchFinder::MatchResult &Result) {
     if (!WarnOnConditionVariables)
       return;
     if (IsLastInScope) {
-      // If the if statement is the last statement its enclosing statements
+      // If the if statement is the last statement of its enclosing statements
       // scope, we can pull the decl out of the if statement.
       DiagnosticBuilder Diag = diag(ElseLoc, WarningMessage)
-                               << ControlFlowInterruptor;
+                               << ControlFlowInterrupter
+                               << SourceRange(ElseLoc);
       if (checkInitDeclUsageInElse(If) != nullptr) {
         Diag << tooling::fixit::createReplacement(
                     SourceRange(If->getIfLoc()),
@@ -199,7 +276,7 @@ void ElseAfterReturnCheck::check(const MatchFinder::MatchResult &Result) {
       }
       const DeclStmt *VDeclStmt = If->getConditionVariableDeclStmt();
       const VarDecl *VDecl = If->getConditionVariable();
-      std::string Repl =
+      const std::string Repl =
           (tooling::fixit::getText(*VDeclStmt, *Result.Context) +
            llvm::StringRef(";\n") +
            tooling::fixit::getText(If->getIfLoc(), *Result.Context))
@@ -211,7 +288,7 @@ void ElseAfterReturnCheck::check(const MatchFinder::MatchResult &Result) {
       removeElseAndBrackets(Diag, *Result.Context, Else, ElseLoc);
     } else if (WarnOnUnfixable) {
       // Warn, but don't attempt an autofix.
-      diag(ElseLoc, WarningMessage) << ControlFlowInterruptor;
+      diag(ElseLoc, WarningMessage) << ControlFlowInterrupter;
     }
     return;
   }
@@ -220,10 +297,11 @@ void ElseAfterReturnCheck::check(const MatchFinder::MatchResult &Result) {
     if (!WarnOnConditionVariables)
       return;
     if (IsLastInScope) {
-      // If the if statement is the last statement its enclosing statements
+      // If the if statement is the last statement of its enclosing statements
       // scope, we can pull the decl out of the if statement.
       DiagnosticBuilder Diag = diag(ElseLoc, WarningMessage)
-                               << ControlFlowInterruptor;
+                               << ControlFlowInterrupter
+                               << SourceRange(ElseLoc);
       Diag << tooling::fixit::createReplacement(
                   SourceRange(If->getIfLoc()),
                   (tooling::fixit::getText(*If->getInit(), *Result.Context) +
@@ -234,16 +312,14 @@ void ElseAfterReturnCheck::check(const MatchFinder::MatchResult &Result) {
       removeElseAndBrackets(Diag, *Result.Context, Else, ElseLoc);
     } else if (WarnOnUnfixable) {
       // Warn, but don't attempt an autofix.
-      diag(ElseLoc, WarningMessage) << ControlFlowInterruptor;
+      diag(ElseLoc, WarningMessage) << ControlFlowInterrupter;
     }
     return;
   }
 
   DiagnosticBuilder Diag = diag(ElseLoc, WarningMessage)
-                           << ControlFlowInterruptor;
+                           << ControlFlowInterrupter << SourceRange(ElseLoc);
   removeElseAndBrackets(Diag, *Result.Context, Else, ElseLoc);
 }
 
-} // namespace readability
-} // namespace tidy
-} // namespace clang
+} // namespace clang::tidy::readability

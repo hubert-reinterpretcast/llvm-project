@@ -1,4 +1,4 @@
-//===--- UseAutoCheck.cpp - clang-tidy-------------------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -8,26 +8,25 @@
 
 #include "UseAutoCheck.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/TypeLoc.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Tooling/FixIt.h"
+#include "llvm/ADT/STLExtras.h"
 
 using namespace clang;
 using namespace clang::ast_matchers;
 using namespace clang::ast_matchers::internal;
 
-namespace clang {
-namespace tidy {
-namespace modernize {
-namespace {
+namespace clang::tidy::modernize {
 
-const char IteratorDeclStmtId[] = "iterator_decl";
-const char DeclWithNewId[] = "decl_new";
-const char DeclWithCastId[] = "decl_cast";
-const char DeclWithTemplateCastId[] = "decl_template";
+static const char IteratorDeclStmtId[] = "iterator_decl";
+static const char DeclWithNewId[] = "decl_new";
+static const char DeclWithCastId[] = "decl_cast";
+static const char DeclWithTemplateCastId[] = "decl_template";
 
-size_t GetTypeNameLength(bool RemoveStars, StringRef Text) {
+static size_t getTypeNameLength(bool RemoveStars, StringRef Text) {
   enum CharType { Space, Alpha, Punctuation };
   CharType LastChar = Space, BeforeSpace = Punctuation;
   size_t NumChars = 0;
@@ -38,12 +37,11 @@ size_t GetTypeNameLength(bool RemoveStars, StringRef Text) {
     else if (C == '>')
       --TemplateTypenameCntr;
     const CharType NextChar =
-        isAlphanumeric(C)
-            ? Alpha
-            : (isWhitespace(C) ||
-               (!RemoveStars && TemplateTypenameCntr == 0 && C == '*'))
-                  ? Space
-                  : Punctuation;
+        isAlphanumeric(C) ? Alpha
+        : (isWhitespace(C) ||
+           (!RemoveStars && TemplateTypenameCntr == 0 && C == '*'))
+            ? Space
+            : Punctuation;
     if (NextChar != Space) {
       ++NumChars; // Count the non-space character.
       if (LastChar == Space && NextChar == Alpha && BeforeSpace == Alpha)
@@ -55,6 +53,7 @@ size_t GetTypeNameLength(bool RemoveStars, StringRef Text) {
   return NumChars;
 }
 
+namespace {
 /// Matches variable declarations that have explicit initializers that
 /// are not initializer lists.
 ///
@@ -66,7 +65,7 @@ size_t GetTypeNameLength(bool RemoveStars, StringRef Text) {
 ///   MyType C;
 /// \endcode
 ///
-/// varDecl(hasWrittenNonListInitializer()) maches \c I and \c A but not \c B
+/// varDecl(hasWrittenNonListInitializer()) matches \c I and \c A but not \c B
 /// or \c C.
 AST_MATCHER(VarDecl, hasWrittenNonListInitializer) {
   const Expr *Init = Node.getAnyInitializer();
@@ -102,12 +101,22 @@ AST_MATCHER_P(QualType, isSugarFor, Matcher<QualType>, SugarMatcher) {
     if (SugarMatcher.matches(QT, Finder, Builder))
       return true;
 
-    QualType NewQT = QT.getSingleStepDesugaredType(Finder->getASTContext());
+    const QualType NewQT =
+        QT.getSingleStepDesugaredType(Finder->getASTContext());
     if (NewQT == QT)
       return false;
     QT = NewQT;
   }
 }
+
+/// Matches declaration reference or member expressions with explicit template
+/// arguments.
+AST_POLYMORPHIC_MATCHER(hasExplicitTemplateArgs,
+                        AST_POLYMORPHIC_SUPPORTED_TYPES(DeclRefExpr,
+                                                        MemberExpr)) {
+  return Node.hasExplicitTemplateArgs();
+}
+} // namespace
 
 /// Matches named declarations that have one of the standard iterator
 /// names: iterator, reverse_iterator, const_iterator, const_reverse_iterator.
@@ -119,16 +128,11 @@ AST_MATCHER_P(QualType, isSugarFor, Matcher<QualType>, SugarMatcher) {
 /// \endcode
 ///
 /// namedDecl(hasStdIteratorName()) matches \c I and \c CI.
-AST_MATCHER(NamedDecl, hasStdIteratorName) {
-  static const char *const IteratorNames[] = {"iterator", "reverse_iterator",
-                                              "const_iterator",
-                                              "const_reverse_iterator"};
-
-  for (const char *Name : IteratorNames) {
-    if (hasName(Name).matches(Node, Finder, Builder))
-      return true;
-  }
-  return false;
+static Matcher<NamedDecl> hasStdIteratorName() {
+  static const StringRef IteratorNames[] = {"iterator", "reverse_iterator",
+                                            "const_iterator",
+                                            "const_reverse_iterator"};
+  return hasAnyName(IteratorNames);
 }
 
 /// Matches named declarations that have one of the standard container
@@ -143,8 +147,8 @@ AST_MATCHER(NamedDecl, hasStdIteratorName) {
 ///
 /// recordDecl(hasStdContainerName()) matches \c vector and \c forward_list
 /// but not \c my_vec.
-AST_MATCHER(NamedDecl, hasStdContainerName) {
-  static const char *const ContainerNames[] = {
+static Matcher<NamedDecl> hasStdContainerName() {
+  static const StringRef ContainerNames[] = {
       "array",         "deque",
       "forward_list",  "list",
       "vector",
@@ -158,94 +162,46 @@ AST_MATCHER(NamedDecl, hasStdContainerName) {
       "queue",         "priority_queue",
       "stack"};
 
-  for (const char *Name : ContainerNames) {
-    if (hasName(Name).matches(Node, Finder, Builder))
-      return true;
-  }
-  return false;
-}
-
-/// Matches declarations whose declaration context is the C++ standard library
-/// namespace std.
-///
-/// Note that inline namespaces are silently ignored during the lookup since
-/// both libstdc++ and libc++ are known to use them for versioning purposes.
-///
-/// Given:
-/// \code
-///   namespace ns {
-///     struct my_type {};
-///     using namespace std;
-///   }
-///
-///   using std::vector;
-///   using ns:my_type;
-///   using ns::list;
-/// \code
-///
-/// usingDecl(hasAnyUsingShadowDecl(hasTargetDecl(isFromStdNamespace())))
-/// matches "using std::vector" and "using ns::list".
-AST_MATCHER(Decl, isFromStdNamespace) {
-  const DeclContext *D = Node.getDeclContext();
-
-  while (D->isInlineNamespace())
-    D = D->getParent();
-
-  if (!D->isNamespace() || !D->getParent()->isTranslationUnit())
-    return false;
-
-  const IdentifierInfo *Info = cast<NamespaceDecl>(D)->getIdentifier();
-
-  return (Info && Info->isStr("std"));
-}
-
-/// Matches declaration reference or member expressions with explicit template
-/// arguments.
-AST_POLYMORPHIC_MATCHER(hasExplicitTemplateArgs,
-                        AST_POLYMORPHIC_SUPPORTED_TYPES(DeclRefExpr,
-                                                        MemberExpr)) {
-  return Node.hasExplicitTemplateArgs();
+  return hasAnyName(ContainerNames);
 }
 
 /// Returns a DeclarationMatcher that matches standard iterators nested
 /// inside records with a standard container name.
-DeclarationMatcher standardIterator() {
+static DeclarationMatcher standardIterator() {
   return decl(
       namedDecl(hasStdIteratorName()),
-      hasDeclContext(recordDecl(hasStdContainerName(), isFromStdNamespace())));
+      hasDeclContext(recordDecl(hasStdContainerName(), isInStdNamespace())));
 }
 
 /// Returns a TypeMatcher that matches typedefs for standard iterators
 /// inside records with a standard container name.
-TypeMatcher typedefIterator() {
+static TypeMatcher typedefIterator() {
   return typedefType(hasDeclaration(standardIterator()));
 }
 
 /// Returns a TypeMatcher that matches records named for standard
 /// iterators nested inside records named for standard containers.
-TypeMatcher nestedIterator() {
+static TypeMatcher nestedIterator() {
   return recordType(hasDeclaration(standardIterator()));
 }
 
 /// Returns a TypeMatcher that matches types declared with using
 /// declarations and which name standard iterators for standard containers.
-TypeMatcher iteratorFromUsingDeclaration() {
+static TypeMatcher iteratorFromUsingDeclaration() {
   auto HasIteratorDecl = hasDeclaration(namedDecl(hasStdIteratorName()));
-  // Types resulting from using declarations are represented by elaboratedType.
-  return elaboratedType(
-      // Unwrap the nested name specifier to test for one of the standard
-      // containers.
-      hasQualifier(specifiesType(templateSpecializationType(hasDeclaration(
-          namedDecl(hasStdContainerName(), isFromStdNamespace()))))),
-      // the named type is what comes after the final '::' in the type. It
-      // should name one of the standard iterator names.
-      namesType(
-          anyOf(typedefType(HasIteratorDecl), recordType(HasIteratorDecl))));
+  // Unwrap the nested name specifier to test for one of the standard
+  // containers.
+  auto Qualifier = hasQualifier(specifiesType(templateSpecializationType(
+      hasDeclaration(namedDecl(hasStdContainerName(), isInStdNamespace())))));
+  // the named type is what comes after the final '::' in the type. It should
+  // name one of the standard iterator names.
+  return anyOf(typedefType(HasIteratorDecl, Qualifier),
+               recordType(HasIteratorDecl, Qualifier));
 }
 
 /// This matcher returns declaration statements that contain variable
 /// declarations with written non-list initializer for standard iterators.
-StatementMatcher makeIteratorDeclMatcher() {
+static StatementMatcher makeIteratorDeclMatcher() {
   return declStmt(unless(has(
                       varDecl(anyOf(unless(hasWrittenNonListInitializer()),
                                     unless(hasType(isSugarFor(anyOf(
@@ -254,7 +210,7 @@ StatementMatcher makeIteratorDeclMatcher() {
       .bind(IteratorDeclStmtId);
 }
 
-StatementMatcher makeDeclWithNewMatcher() {
+static StatementMatcher makeDeclWithNewMatcher() {
   return declStmt(
              unless(has(varDecl(anyOf(
                  unless(hasInitializer(ignoringParenImpCasts(cxxNewExpr()))),
@@ -272,13 +228,13 @@ StatementMatcher makeDeclWithNewMatcher() {
       .bind(DeclWithNewId);
 }
 
-StatementMatcher makeDeclWithCastMatcher() {
+static StatementMatcher makeDeclWithCastMatcher() {
   return declStmt(
              unless(has(varDecl(unless(hasInitializer(explicitCastExpr()))))))
       .bind(DeclWithCastId);
 }
 
-StatementMatcher makeDeclWithTemplateCastMatcher() {
+static StatementMatcher makeDeclWithTemplateCastMatcher() {
   auto ST =
       substTemplateTypeParmType(hasReplacementType(equalsBoundNode("arg")));
 
@@ -299,7 +255,7 @@ StatementMatcher makeDeclWithTemplateCastMatcher() {
       .bind(DeclWithTemplateCastId);
 }
 
-StatementMatcher makeCombinedMatcher() {
+static StatementMatcher makeCombinedMatcher() {
   return declStmt(
       // At least one varDecl should be a child of the declStmt to ensure
       // it's a declaration list and avoid matching other declarations,
@@ -312,8 +268,6 @@ StatementMatcher makeCombinedMatcher() {
             makeDeclWithCastMatcher(), makeDeclWithTemplateCastMatcher()));
 }
 
-} // namespace
-
 UseAutoCheck::UseAutoCheck(StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
       MinTypeNameLength(Options.get("MinTypeNameLength", 5)),
@@ -325,8 +279,7 @@ void UseAutoCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
 }
 
 void UseAutoCheck::registerMatchers(MatchFinder *Finder) {
-  Finder->addMatcher(traverse(ast_type_traits::TK_AsIs, makeCombinedMatcher()),
-                     this);
+  Finder->addMatcher(traverse(TK_AsIs, makeCombinedMatcher()), this);
 }
 
 void UseAutoCheck::replaceIterators(const DeclStmt *D, ASTContext *Context) {
@@ -348,7 +301,7 @@ void UseAutoCheck::replaceIterators(const DeclStmt *D, ASTContext *Context) {
 
     // Drill down to the as-written initializer.
     const Expr *E = (*Construct->arg_begin())->IgnoreParenImpCasts();
-    if (E != E->IgnoreConversionOperator()) {
+    if (E != E->IgnoreConversionOperatorSingleStep()) {
       // We hit a conversion operator. Early-out now as they imply an implicit
       // conversion from a different type. Could also mean an explicit
       // conversion from the same type but that's pretty rare.
@@ -364,7 +317,7 @@ void UseAutoCheck::replaceIterators(const DeclStmt *D, ASTContext *Context) {
       if (NestedConstruct->getConstructor()->isConvertingConstructor(false))
         return;
     }
-    if (!Context->hasSameType(V->getType(), E->getType()))
+    if (!ASTContext::hasSameType(V->getType(), E->getType()))
       return;
   }
 
@@ -375,9 +328,29 @@ void UseAutoCheck::replaceIterators(const DeclStmt *D, ASTContext *Context) {
   // like function pointers. Not a concern since this action only works with
   // iterators but something to keep in mind in the future.
 
-  SourceRange Range(V->getTypeSourceInfo()->getTypeLoc().getSourceRange());
+  const SourceRange Range(
+      V->getTypeSourceInfo()->getTypeLoc().getSourceRange());
   diag(Range.getBegin(), "use auto when declaring iterators")
       << FixItHint::CreateReplacement(Range, "auto");
+}
+
+static void ignoreTypeLocClasses(
+    TypeLoc &Loc,
+    const std::initializer_list<TypeLoc::TypeLocClass> &LocClasses) {
+  while (llvm::is_contained(LocClasses, Loc.getTypeLocClass()))
+    Loc = Loc.getNextTypeLoc();
+}
+
+static bool isMultiLevelPointerToTypeLocClasses(
+    TypeLoc Loc,
+    const std::initializer_list<TypeLoc::TypeLocClass> &LocClasses) {
+  ignoreTypeLocClasses(Loc, {TypeLoc::Paren, TypeLoc::Qualified});
+  const TypeLoc::TypeLocClass TLC = Loc.getTypeLocClass();
+  if (TLC != TypeLoc::Pointer && TLC != TypeLoc::MemberPointer)
+    return false;
+  ignoreTypeLocClasses(Loc, {TypeLoc::Paren, TypeLoc::Qualified,
+                             TypeLoc::Pointer, TypeLoc::MemberPointer});
+  return llvm::is_contained(LocClasses, Loc.getTypeLocClass());
 }
 
 void UseAutoCheck::replaceExpr(
@@ -389,6 +362,10 @@ void UseAutoCheck::replaceExpr(
     return;
 
   const QualType FirstDeclType = FirstDecl->getType().getCanonicalType();
+  const TypeSourceInfo *TSI = FirstDecl->getTypeSourceInfo();
+
+  if (TSI == nullptr)
+    return;
 
   std::vector<FixItHint> StarRemovals;
   for (const auto *Dec : D->decls()) {
@@ -403,7 +380,7 @@ void UseAutoCheck::replaceExpr(
       return;
 
     // If VarDecl and Initializer have mismatching unqualified types.
-    if (!Context->hasSameUnqualifiedType(V->getType(), GetType(Expr)))
+    if (!ASTContext::hasSameUnqualifiedType(V->getType(), GetType(Expr)))
       return;
 
     // All subsequent variables in this declaration should have the same
@@ -430,21 +407,15 @@ void UseAutoCheck::replaceExpr(
   // is the same as the initializer, just more CV-qualified. However, TypeLoc
   // information is not reliable where CV qualifiers are concerned so we can't
   // do anything about this case for now.
-  TypeLoc Loc = FirstDecl->getTypeSourceInfo()->getTypeLoc();
-  if (!RemoveStars) {
-    while (Loc.getTypeLocClass() == TypeLoc::Pointer ||
-           Loc.getTypeLocClass() == TypeLoc::Qualified)
-      Loc = Loc.getNextTypeLoc();
-  }
-  while (Loc.getTypeLocClass() == TypeLoc::LValueReference ||
-         Loc.getTypeLocClass() == TypeLoc::RValueReference ||
-         Loc.getTypeLocClass() == TypeLoc::Qualified) {
-    Loc = Loc.getNextTypeLoc();
-  }
-  SourceRange Range(Loc.getSourceRange());
+  TypeLoc Loc = TSI->getTypeLoc();
+  if (!RemoveStars)
+    ignoreTypeLocClasses(Loc, {TypeLoc::Pointer, TypeLoc::Qualified});
+  ignoreTypeLocClasses(Loc, {TypeLoc::LValueReference, TypeLoc::RValueReference,
+                             TypeLoc::Qualified});
+  const SourceRange Range(Loc.getSourceRange());
 
   if (MinTypeNameLength != 0 &&
-      GetTypeNameLength(RemoveStars,
+      getTypeNameLength(RemoveStars,
                         tooling::fixit::getText(Loc.getSourceRange(),
                                                 FirstDecl->getASTContext())) <
           MinTypeNameLength)
@@ -452,12 +423,19 @@ void UseAutoCheck::replaceExpr(
 
   auto Diag = diag(Range.getBegin(), Message);
 
+  const bool ShouldReplenishVariableName = isMultiLevelPointerToTypeLocClasses(
+      TSI->getTypeLoc(), {TypeLoc::FunctionProto, TypeLoc::ConstantArray});
+
   // Space after 'auto' to handle cases where the '*' in the pointer type is
   // next to the identifier. This avoids changing 'int *p' into 'autop'.
-  // FIXME: This doesn't work for function pointers because the variable name
-  // is inside the type.
-  Diag << FixItHint::CreateReplacement(Range, RemoveStars ? "auto " : "auto")
-       << StarRemovals;
+  const llvm::StringRef Auto = ShouldReplenishVariableName
+                                   ? (RemoveStars ? "auto " : "auto *")
+                                   : (RemoveStars ? "auto " : "auto");
+  const std::string ReplenishedVariableName =
+      ShouldReplenishVariableName ? FirstDecl->getQualifiedNameAsString() : "";
+  const std::string Replacement =
+      (Auto + llvm::StringRef{ReplenishedVariableName}).str();
+  Diag << FixItHint::CreateReplacement(Range, Replacement) << StarRemovals;
 }
 
 void UseAutoCheck::check(const MatchFinder::MatchResult &Result) {
@@ -465,10 +443,10 @@ void UseAutoCheck::check(const MatchFinder::MatchResult &Result) {
     replaceIterators(Decl, Result.Context);
   } else if (const auto *Decl =
                  Result.Nodes.getNodeAs<DeclStmt>(DeclWithNewId)) {
-    replaceExpr(Decl, Result.Context,
-                [](const Expr *Expr) { return Expr->getType(); },
-                "use auto when initializing with new to avoid "
-                "duplicating the type name");
+    replaceExpr(
+        Decl, Result.Context, [](const Expr *Expr) { return Expr->getType(); },
+        "use auto when initializing with new to avoid "
+        "duplicating the type name");
   } else if (const auto *Decl =
                  Result.Nodes.getNodeAs<DeclStmt>(DeclWithCastId)) {
     replaceExpr(
@@ -494,6 +472,4 @@ void UseAutoCheck::check(const MatchFinder::MatchResult &Result) {
   }
 }
 
-} // namespace modernize
-} // namespace tidy
-} // namespace clang
+} // namespace clang::tidy::modernize

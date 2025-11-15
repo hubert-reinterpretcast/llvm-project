@@ -13,18 +13,37 @@
 #ifndef POLLY_FORWARDOPTREE_H
 #define POLLY_FORWARDOPTREE_H
 
-namespace llvm {
-
-class PassRegistry;
-
-void initializeForwardOpTreePass(PassRegistry &);
-} // namespace llvm
+#include "polly/ScopPass.h"
 
 namespace polly {
 
-class ScopPass;
+struct ForwardOpTreePass final : llvm::PassInfoMixin<ForwardOpTreePass> {
+  ForwardOpTreePass() {}
 
-ScopPass *createForwardOpTreePass();
+  llvm::PreservedAnalyses run(Scop &S, ScopAnalysisManager &SAM,
+                              ScopStandardAnalysisResults &SAR, SPMUpdater &U);
+};
+
+struct ForwardOpTreePrinterPass final
+    : llvm::PassInfoMixin<ForwardOpTreePrinterPass> {
+  ForwardOpTreePrinterPass(raw_ostream &OS) : OS(OS) {}
+
+  PreservedAnalyses run(Scop &S, ScopAnalysisManager &,
+                        ScopStandardAnalysisResults &SAR, SPMUpdater &);
+
+private:
+  llvm::raw_ostream &OS;
+};
+
+/// Pass that redirects scalar reads to array elements that are known to contain
+/// the same value.
+///
+/// This reduces the number of scalar accesses and therefore potentially
+/// increases the freedom of the scheduler. In the ideal case, all reads of a
+/// scalar definition are redirected (We currently do not care about removing
+/// the write in this case).  This is also useful for the main DeLICM pass as
+/// there are less scalars to be mapped.
+bool runForwardOpTree(Scop &S);
 } // namespace polly
 
 #endif // POLLY_FORWARDOPTREE_H

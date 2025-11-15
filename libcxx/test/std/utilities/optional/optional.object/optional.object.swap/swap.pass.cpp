@@ -13,9 +13,10 @@
 //     noexcept(is_nothrow_move_constructible<T>::value &&
 //              is_nothrow_swappable<T>::value)
 
+#include <cassert>
+#include <memory>
 #include <optional>
 #include <type_traits>
-#include <cassert>
 
 #include "test_macros.h"
 #include "archetypes.h"
@@ -63,57 +64,152 @@ public:
     friend void swap(Z&, Z&) {TEST_THROW(6);}
 };
 
+class W
+{
+    int i_;
+public:
+    constexpr W(int i) : i_(i) {}
+
+    friend constexpr bool operator==(const W& x, const W& y) {return x.i_ == y.i_;}
+    friend TEST_CONSTEXPR_CXX20 void swap(W& x, W& y) noexcept {std::swap(x.i_, y.i_);}
+};
+
+template<class T>
+TEST_CONSTEXPR_CXX20 bool check_swap()
+{
+    {
+        optional<T> opt1;
+        optional<T> opt2;
+        static_assert(noexcept(opt1.swap(opt2)) == true);
+        assert(static_cast<bool>(opt1) == false);
+        assert(static_cast<bool>(opt2) == false);
+        opt1.swap(opt2);
+        assert(static_cast<bool>(opt1) == false);
+        assert(static_cast<bool>(opt2) == false);
+    }
+    {
+        optional<T> opt1(1);
+        optional<T> opt2;
+        static_assert(noexcept(opt1.swap(opt2)) == true);
+        assert(static_cast<bool>(opt1) == true);
+        assert(*opt1 == 1);
+        assert(static_cast<bool>(opt2) == false);
+        opt1.swap(opt2);
+        assert(static_cast<bool>(opt1) == false);
+        assert(static_cast<bool>(opt2) == true);
+        assert(*opt2 == 1);
+    }
+    {
+        optional<T> opt1;
+        optional<T> opt2(2);
+        static_assert(noexcept(opt1.swap(opt2)) == true, "");
+        assert(static_cast<bool>(opt1) == false);
+        assert(static_cast<bool>(opt2) == true);
+        assert(*opt2 == 2);
+        opt1.swap(opt2);
+        assert(static_cast<bool>(opt1) == true);
+        assert(*opt1 == 2);
+        assert(static_cast<bool>(opt2) == false);
+    }
+    {
+        optional<T> opt1(1);
+        optional<T> opt2(2);
+        static_assert(noexcept(opt1.swap(opt2)) == true, "");
+        assert(static_cast<bool>(opt1) == true);
+        assert(*opt1 == 1);
+        assert(static_cast<bool>(opt2) == true);
+        assert(*opt2 == 2);
+        opt1.swap(opt2);
+        assert(static_cast<bool>(opt1) == true);
+        assert(*opt1 == 2);
+        assert(static_cast<bool>(opt2) == true);
+        assert(*opt2 == 1);
+    }
+    return true;
+}
+
+#if TEST_STD_VER >= 26
+template <typename T>
+constexpr bool check_swap_ref() {
+  {
+    optional<T&> opt1;
+    optional<T&> opt2;
+    static_assert(noexcept(opt1.swap(opt2)) == true);
+    assert(static_cast<bool>(opt1) == false);
+    assert(static_cast<bool>(opt2) == false);
+    opt1.swap(opt2);
+    assert(static_cast<bool>(opt1) == false);
+    assert(static_cast<bool>(opt2) == false);
+  }
+
+  {
+    T one{1};
+    optional<T&> opt1(one);
+    optional<T&> opt2;
+    static_assert(noexcept(opt1.swap(opt2)) == true);
+    assert(static_cast<bool>(opt1) == true);
+    assert(std::addressof(*opt1) == std::addressof(one));
+    assert(static_cast<bool>(opt2) == false);
+    opt1.swap(opt2);
+    assert(static_cast<bool>(opt1) == false);
+    assert(static_cast<bool>(opt2) == true);
+    assert(std::addressof(*opt2) == std::addressof(one));
+  }
+
+  {
+    T two{2};
+    optional<T&> opt1;
+    optional<T&> opt2(two);
+    static_assert(noexcept(opt1.swap(opt2)) == true);
+    assert(static_cast<bool>(opt1) == false);
+    assert(static_cast<bool>(opt2) == true);
+    assert(std::addressof(*opt2) == std::addressof(two));
+    opt1.swap(opt2);
+    assert(static_cast<bool>(opt1) == true);
+    assert(std::addressof(*opt1) == std::addressof(two));
+    assert(static_cast<bool>(opt2) == false);
+  }
+
+  {
+    T one{1};
+    T two{2};
+
+    optional<T&> opt1(one);
+    optional<T&> opt2(two);
+    static_assert(noexcept(opt1.swap(opt2)) == true);
+    assert(static_cast<bool>(opt1) == true);
+    assert(*opt1 == 1);
+    assert(std::addressof(*opt1) == std::addressof(one));
+    assert(static_cast<bool>(opt2) == true);
+    assert(*opt2 == 2);
+    assert(std::addressof(*opt2) == std::addressof(two));
+    opt1.swap(opt2);
+    assert(static_cast<bool>(opt1) == true);
+    assert(*opt1 == 2);
+    assert(std::addressof(*opt1) == std::addressof(two));
+    assert(static_cast<bool>(opt2) == true);
+    assert(*opt2 == 1);
+    assert(std::addressof(*opt2) == std::addressof(one));
+  }
+
+  return true;
+}
+#endif
 
 int main(int, char**)
 {
-    {
-        optional<int> opt1;
-        optional<int> opt2;
-        static_assert(noexcept(opt1.swap(opt2)) == true, "");
-        assert(static_cast<bool>(opt1) == false);
-        assert(static_cast<bool>(opt2) == false);
-        opt1.swap(opt2);
-        assert(static_cast<bool>(opt1) == false);
-        assert(static_cast<bool>(opt2) == false);
-    }
-    {
-        optional<int> opt1(1);
-        optional<int> opt2;
-        static_assert(noexcept(opt1.swap(opt2)) == true, "");
-        assert(static_cast<bool>(opt1) == true);
-        assert(*opt1 == 1);
-        assert(static_cast<bool>(opt2) == false);
-        opt1.swap(opt2);
-        assert(static_cast<bool>(opt1) == false);
-        assert(static_cast<bool>(opt2) == true);
-        assert(*opt2 == 1);
-    }
-    {
-        optional<int> opt1;
-        optional<int> opt2(2);
-        static_assert(noexcept(opt1.swap(opt2)) == true, "");
-        assert(static_cast<bool>(opt1) == false);
-        assert(static_cast<bool>(opt2) == true);
-        assert(*opt2 == 2);
-        opt1.swap(opt2);
-        assert(static_cast<bool>(opt1) == true);
-        assert(*opt1 == 2);
-        assert(static_cast<bool>(opt2) == false);
-    }
-    {
-        optional<int> opt1(1);
-        optional<int> opt2(2);
-        static_assert(noexcept(opt1.swap(opt2)) == true, "");
-        assert(static_cast<bool>(opt1) == true);
-        assert(*opt1 == 1);
-        assert(static_cast<bool>(opt2) == true);
-        assert(*opt2 == 2);
-        opt1.swap(opt2);
-        assert(static_cast<bool>(opt1) == true);
-        assert(*opt1 == 2);
-        assert(static_cast<bool>(opt2) == true);
-        assert(*opt2 == 1);
-    }
+    check_swap<int>();
+    check_swap<W>();
+#if TEST_STD_VER > 17
+    static_assert(check_swap<int>());
+    static_assert(check_swap<W>());
+#endif
+#if TEST_STD_VER >= 26
+    static_assert(check_swap_ref<int>());
+    static_assert(check_swap_ref<W>());
+    check_swap_ref<int>();
+    check_swap_ref<W>();
+#endif
     {
         optional<X> opt1;
         optional<X> opt2;

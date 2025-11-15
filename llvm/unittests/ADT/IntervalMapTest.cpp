@@ -13,9 +13,9 @@ using namespace llvm;
 
 namespace {
 
-typedef IntervalMap<unsigned, unsigned, 4> UUMap;
-typedef IntervalMap<unsigned, unsigned, 4,
-                    IntervalMapHalfOpenInfo<unsigned>> UUHalfOpenMap;
+using UUMap = IntervalMap<unsigned, unsigned, 4>;
+using UUHalfOpenMap =
+    IntervalMap<unsigned, unsigned, 4, IntervalMapHalfOpenInfo<unsigned>>;
 
 // Empty map tests
 TEST(IntervalMapTest, EmptyMap) {
@@ -620,26 +620,73 @@ TEST(IntervalMapTest, RandomCoalescing) {
 
 }
 
+static void setupOverlaps(UUMap &M) {
+  M.insert(10, 20, 0);
+  M.insert(30, 40, 0);
+  M.insert(50, 60, 0);
+  // Add extra nodes to force allocations.
+  for (int i = 70; i < 100; i += 2)
+    M.insert(i, i + 1, i);
+}
+
+static void checkOverlaps(UUMap &M) {
+  EXPECT_FALSE(M.overlaps(0, 9));
+  EXPECT_TRUE(M.overlaps(0, 10));
+  EXPECT_TRUE(M.overlaps(0, 15));
+  EXPECT_TRUE(M.overlaps(0, 25));
+  EXPECT_TRUE(M.overlaps(0, 45));
+  EXPECT_TRUE(M.overlaps(10, 45));
+  EXPECT_TRUE(M.overlaps(30, 45));
+  EXPECT_TRUE(M.overlaps(35, 36));
+  EXPECT_TRUE(M.overlaps(40, 45));
+  EXPECT_FALSE(M.overlaps(45, 45));
+  EXPECT_TRUE(M.overlaps(60, 60));
+  EXPECT_TRUE(M.overlaps(60, 66));
+  EXPECT_FALSE(M.overlaps(66, 66));
+}
+
+TEST(IntervalMapTest, Copy) {
+  // Test that copy assignment and initialization works.
+  UUHalfOpenMap::Allocator Allocator;
+  UUMap Src(Allocator);
+  setupOverlaps(Src);
+
+  UUMap CopyAssignmentDst(Allocator);
+  CopyAssignmentDst = Src;
+
+  UUMap CopyInitDst(Src);
+
+  checkOverlaps(Src);
+  Src.clear();
+
+  checkOverlaps(CopyAssignmentDst);
+  checkOverlaps(CopyInitDst);
+}
+
+TEST(IntervalMapTest, Move) {
+  // Test that move assignment and initialization works.
+  UUHalfOpenMap::Allocator Allocator;
+  // Double check that MoveAssignmentDst owns all its data by moving from an
+  // object that is destroyed before we call checkOverlaps.
+  UUMap MoveAssignmentDst(Allocator);
+  {
+    UUMap Src(Allocator);
+    setupOverlaps(Src);
+    MoveAssignmentDst = std::move(Src);
+  }
+  checkOverlaps(MoveAssignmentDst);
+
+  UUMap MoveInitSrc(Allocator);
+  setupOverlaps(MoveInitSrc);
+  UUMap MoveInitDst(std::move(MoveInitSrc));
+  checkOverlaps(MoveInitDst);
+}
+
 TEST(IntervalMapTest, Overlaps) {
   UUMap::Allocator allocator;
   UUMap map(allocator);
-  map.insert(10, 20, 0);
-  map.insert(30, 40, 0);
-  map.insert(50, 60, 0);
-
-  EXPECT_FALSE(map.overlaps(0, 9));
-  EXPECT_TRUE(map.overlaps(0, 10));
-  EXPECT_TRUE(map.overlaps(0, 15));
-  EXPECT_TRUE(map.overlaps(0, 25));
-  EXPECT_TRUE(map.overlaps(0, 45));
-  EXPECT_TRUE(map.overlaps(10, 45));
-  EXPECT_TRUE(map.overlaps(30, 45));
-  EXPECT_TRUE(map.overlaps(35, 36));
-  EXPECT_TRUE(map.overlaps(40, 45));
-  EXPECT_FALSE(map.overlaps(45, 45));
-  EXPECT_TRUE(map.overlaps(60, 60));
-  EXPECT_TRUE(map.overlaps(60, 66));
-  EXPECT_FALSE(map.overlaps(66, 66));
+  setupOverlaps(map);
+  checkOverlaps(map);
 }
 
 TEST(IntervalMapTest, OverlapsHalfOpen) {
@@ -665,7 +712,7 @@ TEST(IntervalMapTest, OverlapsHalfOpen) {
 }
 
 TEST(IntervalMapOverlapsTest, SmallMaps) {
-  typedef IntervalMapOverlaps<UUMap,UUMap> UUOverlaps;
+  using UUOverlaps = IntervalMapOverlaps<UUMap, UUMap>;
   UUMap::Allocator allocator;
   UUMap mapA(allocator);
   UUMap mapB(allocator);
@@ -709,7 +756,7 @@ TEST(IntervalMapOverlapsTest, SmallMaps) {
 }
 
 TEST(IntervalMapOverlapsTest, BigMaps) {
-  typedef IntervalMapOverlaps<UUMap,UUMap> UUOverlaps;
+  using UUOverlaps = IntervalMapOverlaps<UUMap, UUMap>;
   UUMap::Allocator allocator;
   UUMap mapA(allocator);
   UUMap mapB(allocator);
